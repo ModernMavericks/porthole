@@ -53,3 +53,14 @@ if(BATS_EXECUTABLE)
 else()
   message(STATUS "bats not found -- BATS suites won't run via ctest (install bats to enable)")
 endif()
+
+# `cmake --build . --target pkg` builds the Porthole installer from the freshly built
+# Porthole.app (the shared viewer engine), with the engine CLI + templates staged inside it.
+add_custom_target(pkg
+  COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/packaging/macos/build_pkg.sh"
+             "${PROJECT_VERSION}" "porthole-${PROJECT_VERSION}.pkg"
+             "$<TARGET_BUNDLE_DIR:Porthole>"
+  DEPENDS Porthole
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  USES_TERMINAL
+  COMMENT "Building porthole-${PROJECT_VERSION}.pkg")

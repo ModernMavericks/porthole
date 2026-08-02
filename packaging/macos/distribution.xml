@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="1">
+    <title>Porthole</title>
+    <options customize="never" require-scripts="false" hostArchitectures="x86_64"/>
+    <volume-check>
+        <allowed-os-versions><os-version min="10.9"/></allowed-os-versions>
+    </volume-check>
+    <choices-outline><line choice="default"/></choices-outline>
+    <choice id="default" title="Porthole">
+        <pkg-ref id="dev.modernmavericks.porthole"/>
+    </choice>
+    <pkg-ref id="dev.modernmavericks.porthole" version="0">porthole-component.pkg</pkg-ref>
+</installer-gui-script>
