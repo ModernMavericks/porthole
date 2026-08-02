@@ -13,11 +13,14 @@
     NSInputStream *_in; NSOutputStream *_out;
     NSMutableData *_inbuf; NSMutableData *_outbuf;
     NSMutableDictionary *_rawChunks;   // raw sub-packets (index>0) awaiting their main packet
-    __weak id<PortholeTransportDelegate> _delegate;
+    __unsafe_unretained id<PortholeTransportDelegate> _delegate;
 }
 
-// Manual accessors: under MRR the compiler won't @synthesize a weak property,
-// so back it with an explicit __weak ivar (no retain).
+// Manual accessors: under MRR the compiler won't @synthesize a weak property, so back it
+// with an explicit non-owning ivar (no retain). It is __unsafe_unretained, not __weak:
+// __weak requires ARC, and a newer clang (e.g. the macOS CI runner's) makes `__weak` under
+// MRR a hard error -- older AppleClang merely warned. The semantics are identical to what
+// this MRR build always had (non-zeroing; the delegate must outlive the transport).
 // Delegate is declared `weak` in the header for future ARC callers, but under
 // this MRR build the backing ivar is NOT zeroing -- it is effectively
 // unsafe-unretained. The delegate MUST outlive the transport (in Porthole it is
