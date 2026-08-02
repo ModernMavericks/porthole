@@ -1,0 +1,23 @@
+name: Install Porthole engine
+description: >
+  Make the Porthole viewer-generator engine available to a consuming product build.
+  Porthole provides SOURCE (the native viewer under viewer/, the generator, and
+  bin/porthole-recover-watch), so -- unlike shared-cmake -- there is no cmake --install:
+  referencing this action at a pinned ref (that ref IS the version pin, e.g. @v1) makes
+  GitHub check the whole engine out, and the action exports PORTHOLE_DIR (its root) so
+  the product's CMake (add_subdirectory ${PORTHOLE_DIR}/viewer) and packaging
+  (${PORTHOLE_DIR}/bin/porthole-recover-watch, generate-viewer) resolve it. Locally the
+  product falls back to a sibling checkout; a consumer should NOT clone porthole by hand.
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -eu
+        # This action lives at <engine>/.github/actions/install; the engine root is 3 up.
+        root="$(cd "$GITHUB_ACTION_PATH/../../.." && pwd)"
+        [ -f "$root/bin/generate-viewer" ] && [ -d "$root/viewer" ] \
+          || { echo "::error::PORTHOLE_DIR ($root) doesn't look like the porthole engine"; exit 1; }
+        echo "PORTHOLE_DIR=$root" >> "$GITHUB_ENV"
+        echo "Porthole engine -> $root"

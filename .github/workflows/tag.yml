@@ -1,0 +1,39 @@
+name: tag
+
+# Version the Porthole engine as a consumable ingredient (same shape as shared-cmake).
+# On each push to main: create the immutable vX.Y.Z tag (once, from VERSION) and
+# fast-forward the moving major tag vX. Consumers reference the install action at @v1
+# (moving -> latest v1.x) or @vX.Y.Z (exact); Renovate's github-actions manager tracks
+# the pin. Bump VERSION (and the major, deliberately, on a breaking change) to cut one.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Tag version + move major
+        run: |
+          set -eu
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          ver="$(cat VERSION)"
+          major="v${ver%%.*}"
+          if git rev-parse -q --verify "refs/tags/v$ver" >/dev/null; then
+            echo "v$ver already exists -- leaving it (bump VERSION to cut a new release)"
+          else
+            git tag -a "v$ver" -m "v$ver"
+            git push origin "v$ver"
+            echo "created v$ver"
+          fi
+          git tag -f -a "$major" -m "$major -> v$ver"
+          git push -f origin "$major"
+          echo "moved $major -> $(git rev-parse --short HEAD)"
