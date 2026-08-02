@@ -1,0 +1,23 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  html,body{margin:0;height:100%;font-family:sans-serif}
+  /* Each region on its own layer; content is fixed-size and should NOT
+     repaint on width change -- only re-place. */
+  #toolbar{position:fixed;top:0;left:0;right:0;height:48px;background:#345;
+           will-change:transform;color:#fff}
+  #sidebar{position:fixed;top:48px;left:0;bottom:0;width:220px;background:#223;
+           will-change:transform}
+  #list{position:absolute;top:48px;left:220px;right:0;bottom:0;overflow:auto;
+        background:#fff}
+  .row{height:56px;border-bottom:1px solid #eee;will-change:transform;
+       padding:8px;box-sizing:border-box}
+</style></head><body>
+  <div id="toolbar">toolbar</div>
+  <div id="sidebar">sidebar</div>
+  <div id="list"></div>
+  <script>
+    const list = document.getElementById('list');
+    for (let i=0;i<40;i++){const r=document.createElement('div');
+      r.className='row';r.textContent='row '+i;list.appendChild(r);}
+  </script>
+</body></html>

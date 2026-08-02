@@ -1,0 +1,19 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  html,body{margin:0;height:100%}
+  #bleed{position:fixed;inset:0;will-change:contents}
+</style></head><body>
+  <canvas id="bleed"></canvas>
+  <script>
+    /* Continuously repaint a full-bleed canvas so every step re-rasters
+       ~the entire window: the worst-case control. */
+    const c=document.getElementById('bleed');
+    function fit(){c.width=innerWidth;c.height=innerHeight;}
+    fit(); addEventListener('resize',fit);
+    let t=0;
+    (function draw(){t+=1;const g=c.getContext('2d');
+      g.fillStyle='hsl('+(t%360)+',80%,50%)';
+      g.fillRect(0,0,c.width,c.height);
+      requestAnimationFrame(draw);})();
+  </script>
+</body></html>
