@@ -31,12 +31,14 @@ done
 
 CONF=$(cd "$(dirname "$CONF_ARG")" && pwd)/$(basename "$CONF_ARG")
 [ -f "$CONF" ] || { echo "porthole materialize: no such conf: $CONF" >&2; exit 1; }
-SLUG=$(basename "$CONF" .conf)
 
 # Load the conf for NAME + ICON_GLOB, using the same defaults the generator applies.
 APP= NAME= ICON_GLOB=
 # shellcheck disable=SC1090
 . "$CONF"
+# The conf's basename is authoritative for the slug -- a manifest SLUG= is ignored, exactly as
+# generate-viewer does. Compute it AFTER sourcing so a conf's SLUG= line cannot clobber it.
+SLUG=$(basename "$CONF" .conf)
 : "${APP:=$NAME}"
 NAME="${NAME:-Linux $APP}"
 [ -n "$NAME" ] && [ "$NAME" != "Linux " ] || { echo "porthole materialize: $CONF sets no APP/NAME" >&2; exit 1; }
