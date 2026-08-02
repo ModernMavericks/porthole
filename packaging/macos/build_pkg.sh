@@ -11,6 +11,15 @@ APP_IN="${3:-}"
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 
+# Locate the shared-cmake scripts dir (only needed when staging the Sparkle updater):
+# $MSC_SCRIPTS (CI) -> the CMake user package registry -> a sibling checkout.
+resolve_msc() {
+  _m="${MSC_SCRIPTS:-}"
+  [ -d "$_m" ] || _m="$(cat "$HOME/.cmake/packages/MavericksSharedCMake/"* 2>/dev/null | head -1)/scripts"
+  [ -d "$_m" ] || _m="$REPO/../mavericks-shared-cmake/scripts"
+  [ -d "$_m" ] && printf '%s' "$_m"
+}
+
 # Locate the built Porthole.app (arg wins; else a conventional build dir).
 if [ -z "$APP_IN" ]; then
   for d in "$REPO/build/viewer/Porthole.app" "$REPO/build-native/viewer/Porthole.app"; do
@@ -46,10 +55,31 @@ exec "/Applications/Porthole.app/Contents/Resources/engine/bin/porthole" "$@"
 EOF
 chmod 755 "$ROOT/usr/local/bin/porthole"
 
+# Optional Sparkle updater: when UPD_APP names a built PortholeUpdater.app, stage it + its
+# daily-check LaunchAgent + the load-on-install postinstall via the shared helper (release-time;
+# the release workflow sets UPD_APP). Absent -> the pkg ships without auto-update.
+SCRIPTS_ARG=""
+if [ -n "${UPD_APP:-}" ]; then
+  [ -d "$UPD_APP" ] || { echo "build_pkg: UPD_APP set but no updater .app at $UPD_APP" >&2; exit 1; }
+  MSC="$(resolve_msc || true)"
+  [ -n "$MSC" ] && [ -f "$MSC/stage_updater.sh" ] \
+    || { echo "build_pkg: UPD_APP set but shared-cmake stage_updater.sh not found (set MSC_SCRIPTS)" >&2; exit 1; }
+  SCRIPTSDIR=$(mktemp -d "${TMPDIR:-/tmp}/porthole-scripts.XXXXXX")
+  sh "$MSC/stage_updater.sh" \
+    --stage "$ROOT" \
+    --app "$UPD_APP" \
+    --app-dir "/Library/Application Support/ModernMavericks" \
+    --agent-label "dev.modernmavericks.porthole-updatecheck" \
+    --scripts-out "$SCRIPTSDIR"
+  SCRIPTS_ARG="--scripts $SCRIPTSDIR"
+fi
+
 COMPONENT_DIR=$(mktemp -d "${TMPDIR:-/tmp}/porthole-pkg.XXXXXX")
+# shellcheck disable=SC2086  # SCRIPTS_ARG is a deliberate optional --scripts <dir> pair
 pkgbuild --root "$ROOT" \
     --identifier dev.modernmavericks.porthole \
     --version "$VERSION" \
+    $SCRIPTS_ARG \
     --install-location / \
     "$COMPONENT_DIR/porthole-component.pkg"
 

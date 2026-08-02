@@ -54,6 +54,30 @@ else()
   message(STATUS "bats not found -- BATS suites won't run via ctest (install bats to enable)")
 endif()
 
+# --- Sparkle auto-update helper (release-time) --------------------------------------------
+# Gated OFF so the default build stays hermetic: building the updater fetches the Sparkle
+# framework over the network. The release workflow configures with -DPORTHOLE_BUILD_UPDATER=ON,
+# then stages + signs + appcasts it (shared-cmake scripts/stage_updater.sh + sign_and_appcast.sh
+# -- CI shell steps, EdDSA-secret-gated). Single native x86_64/10.9 variant (this whole project
+# targets 10.9); the Sparkle slice is auto-derived from CMAKE_OSX_ARCHITECTURES.
+option(PORTHOLE_BUILD_UPDATER "Build the Sparkle auto-update helper app (fetches Sparkle; release-time)" OFF)
+if(PORTHOLE_BUILD_UPDATER)
+  include(MavericksSparkle)
+  mavericks_add_updater_app(
+    NAME PortholeUpdater
+    PRODUCT_NAME "Porthole"
+    BUNDLE_ID dev.modernmavericks.PortholeUpdater
+    FEED_URL "https://github.com/ModernMavericks/porthole/releases/download/feed-porthole/appcast.xml"
+    ICON "${CMAKE_CURRENT_SOURCE_DIR}/packaging/macos/Porthole.icns"
+    VERSION "${PROJECT_VERSION}"
+    LOG_PREFIX "PortholeUpdater"
+    CONFIRM_TITLE "Porthole updated"
+    CONFIRM_BODY "Porthole was updated. Relaunch your Linux apps to use the new viewer engine."
+    RELAUNCH_MARKER "/tmp/.porthole-updater-relaunched"
+    # no PANE_HINT_KEY -> a background-found update posts an NSUserNotification.
+  )
+endif()
+
 # `cmake --build . --target pkg` builds the Porthole installer from the freshly built
 # Porthole.app (the shared viewer engine), with the engine CLI + templates staged inside it.
 add_custom_target(pkg
