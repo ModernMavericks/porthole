@@ -1,0 +1,97 @@
+#!/bin/sh
+# porthole -- the Porthole engine CLI (runs from inside the installed Porthole.app or a
+# repo checkout). Subcommands:
+#   materialize <conf-path> [--apps-dir DIR]
+#       Render a preset conf into a standalone "Linux <App>.app" that wraps the SHARED
+#       installed Porthole viewer engine. This is the on-Mac, install-time counterpart of
+#       the build-time viewer generation: a preset ships just the <slug>.conf (the whole
+#       container recipe + launcher are rendered from templates/ by generate-viewer), and
+#       materialize packages that output into a first-class .app whose launcher points at
+#       /Applications/Porthole.app. The app icon is pulled from the live container here on
+#       the Mac (best-effort; never committed).
+set -eu
+
+ENGINE=$(cd "$(dirname "$0")/.." && pwd)   # engine root: bin/, templates/, viewer/cmake/
+
+usage() { echo "usage: porthole materialize <conf-path> [--apps-dir DIR]" >&2; exit 2; }
+
+[ $# -gt 0 ] || usage
+cmd="$1"; shift
+[ "$cmd" = materialize ] || usage
+
+CONF_ARG="${1:-}"; [ -n "$CONF_ARG" ] || usage
+shift
+APPS_DIR="/Applications"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --apps-dir) APPS_DIR="${2:?--apps-dir needs a dir}"; shift 2 ;;
+    *) echo "porthole materialize: unknown arg: $1" >&2; exit 2 ;;
+  esac
+done
+
+CONF=$(cd "$(dirname "$CONF_ARG")" && pwd)/$(basename "$CONF_ARG")
+[ -f "$CONF" ] || { echo "porthole materialize: no such conf: $CONF" >&2; exit 1; }
+SLUG=$(basename "$CONF" .conf)
+
+# Load the conf for NAME + ICON_GLOB, using the same defaults the generator applies.
+APP= NAME= ICON_GLOB=
+# shellcheck disable=SC1090
+. "$CONF"
+: "${APP:=$NAME}"
+NAME="${NAME:-Linux $APP}"
+[ -n "$NAME" ] && [ "$NAME" != "Linux " ] || { echo "porthole materialize: $CONF sets no APP/NAME" >&2; exit 1; }
+BUNDLEID="dev.modernmavericks.porthole.$SLUG"
+
+# 1) Render the preset (container recipe + launcher) via the generator into a staging dir.
+STAGE=$(mktemp -d "${TMPDIR:-/tmp}/porthole-materialize.XXXXXX")
+trap 'rm -rf "$STAGE"' EXIT
+"$ENGINE/bin/generate-viewer" "$CONF" --out "$STAGE" >/dev/null
+
+# 2) Assemble the standalone .app bundle. Layout keeps the launcher's own assumptions
+#    intact: it lives at Contents/Resources/bin/<slug>, so its `_root` resolves to
+#    Contents/Resources and its `$_root/<slug>` recipe path is satisfied.
+BUNDLE="$APPS_DIR/$NAME.app"
+rm -rf "$BUNDLE"
+install -d "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources/bin"
+install -m 0755 "$STAGE/bin/$SLUG" "$BUNDLE/Contents/Resources/bin/$SLUG"
+cp -R "$STAGE/$SLUG" "$BUNDLE/Contents/Resources/$SLUG"
+
+# CFBundleExecutable stub: a double-click runs the real launcher in Resources/bin.
+cat > "$BUNDLE/Contents/MacOS/$SLUG" <<EOF
+#!/bin/sh
+exec "\$(cd "\$(dirname "\$0")/../Resources/bin" && pwd)/$SLUG" "\$@"
+EOF
+chmod 755 "$BUNDLE/Contents/MacOS/$SLUG"
+
+# 3) App icon: pull from the live container here on the Mac (best-effort). A missing
+#    container / PORTHOLE_MATERIALIZE_NO_ICON leaves the bundle iconless -> system generic.
+ICON_FILE=
+if [ "${PORTHOLE_MATERIALIZE_NO_ICON:-}" != 1 ]; then
+  if ONEP_CONTAINER="$SLUG-gui" PORTHOLE_ICON_GLOB="$ICON_GLOB" \
+       sh "$ENGINE/viewer/cmake/extract-app-icns.sh" \
+          "$BUNDLE/Contents/Resources/AppIcon.icns" >/dev/null 2>&1; then
+    ICON_FILE="AppIcon"
+  else
+    echo "porthole: no icon for $NAME (container '$SLUG-gui' not running?) -- using the generic icon" >&2
+  fi
+fi
+
+# 4) Info.plist.
+cat > "$BUNDLE/Contents/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleExecutable</key><string>$SLUG</string>
+	<key>CFBundleName</key><string>$NAME</string>
+	<key>CFBundleDisplayName</key><string>$NAME</string>
+	<key>CFBundleIdentifier</key><string>$BUNDLEID</string>
+	<key>CFBundleIconFile</key><string>$ICON_FILE</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>NSPrincipalClass</key><string>NSApplication</string>
+	<key>LSMinimumSystemVersion</key><string>10.9</string>
+</dict>
+</plist>
+EOF
+
+echo "porthole: materialized $BUNDLE"
