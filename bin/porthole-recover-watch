@@ -1,0 +1,58 @@
+#!/bin/sh
+# Detached viewer watcher (spawned by the launchers). When the viewer exits:
+#   - disconnect (marker present) -> recover by re-invoking the launcher, which is
+#     idempotent (ensures backend, self-heals the tunnel, re-opens the viewer). Retry
+#     with capped backoff until it's back, then give up.
+#   - clean Quit (no marker) -> for an on-demand container, stop it; otherwise just exit.
+# Re-invoking the launcher (not re-implementing bring-up here) keeps this DRY. The launcher
+# guards watcher-spawn on RW_PIDFILE, so recovery never stacks a second watcher.
+#
+# Env: RW_BIN RW_MARKER RW_RELAUNCH RW_PIDFILE (required);
+#      RW_ONDEMAND RW_CONTAINER RW_STOP_PIDS (on-demand quit); WATCH_ONCE (tests: one pass).
+set -u
+: "${RW_BIN:?}" "${RW_MARKER:?}" "${RW_RELAUNCH:?}" "${RW_PIDFILE:?}"
+echo $$ > "$RW_PIDFILE" 2>/dev/null || true
+
+_log() { [ -n "${RW_DEBUG:-}" ] && printf '%s [%s] %s\n' "$(date +%T)" "$$" "$*" >> "$RW_DEBUG"; return 0; }
+_present() { pgrep -f "$RW_BIN" >/dev/null 2>&1; }
+_log "start bin=$RW_BIN marker=$RW_MARKER relaunch=[$RW_RELAUNCH]"
+
+# Wait for the viewer to first appear (skipped in one-shot test mode).
+if [ -z "${WATCH_ONCE:-}" ]; then
+  _j=0; while [ "$_j" -lt 40 ] && ! _present; do sleep 0.5; _j=$((_j + 1)); done
+fi
+
+_log "waited for appear; present=$(_present && echo y || echo n)"
+while :; do
+  if [ -z "${WATCH_ONCE:-}" ]; then
+    while _present; do sleep 3; done      # block until the viewer is gone
+  fi
+  _log "viewer gone; marker=$([ -f "$RW_MARKER" ] && echo present || echo absent)"
+
+  if [ -f "$RW_MARKER" ]; then
+    rm -f "$RW_MARKER"                     # disconnect -> recover
+    _try=0; _delay=2
+    while :; do
+      _log "recover try=$_try: run relaunch"
+      sh -c "$RW_RELAUNCH" >/dev/null 2>&1 || true
+      _log "recover try=$_try: relaunch returned; waiting for viewer"
+      [ -n "${WATCH_ONCE:-}" ] && break
+      _k=0; while [ "$_k" -lt 40 ] && ! _present; do sleep 0.5; _k=$((_k + 1)); done
+      _present && break                    # recovered
+      _try=$((_try + 1)); [ "$_try" -ge 10 ] && { rm -f "$RW_PIDFILE"; exit 1; }
+      sleep "$_delay"; [ "$_delay" -lt 30 ] && _delay=$((_delay * 2))
+    done
+    [ -n "${WATCH_ONCE:-}" ] && break
+    continue
+  fi
+
+  # No marker -> a real Quit (or hard crash). On-demand containers free their RAM.
+  if [ -n "${RW_ONDEMAND:-}" ]; then
+    docker stop "$RW_CONTAINER" >/dev/null 2>&1
+    for _p in ${RW_STOP_PIDS:-}; do
+      [ -f "$_p" ] && kill "$(cat "$_p")" 2>/dev/null; rm -f "$_p"
+    done
+  fi
+  break
+done
+rm -f "$RW_PIDFILE"
