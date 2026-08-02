@@ -1,0 +1,182 @@
+#!/bin/sh
+# generate-viewer <slug>: render an app-specific viewer from apps/<slug>.conf +
+# templates/ into <slug>/ (container dir) + bin/<slug> (launcher). POSIX sh, awk-only
+# rendering, zero third-party deps. Regeneration is idempotent (git diff clean).
+#
+# Rendering markers in templates/:
+#   @VAR@                       -> value of the (exported) variable VAR
+#   #@IF COND ... #@ENDIF       -> block kept iff COND is a truthy (non-empty) var
+# The two-pass renderer resolves #@IF first, then substitutes @VAR@.
+set -eu
+
+# generate-viewer <conf-path> [--out <dir>]: render a viewer from an app definition.
+# The engine's own assets (templates/, the menu daemon) resolve relative to THIS script,
+# so it runs from any cwd; outputs land under --out (default: the conf's own directory).
+CONF_ARG="${1:?usage: generate-viewer <conf-path> [--out <dir>]}"
+OUT_ARG=""
+shift
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --out) OUT_ARG="${2:?--out needs a dir}"; shift 2 ;;
+    *) echo "generate-viewer: unknown arg: $1" >&2; exit 2 ;;
+  esac
+done
+ENGINE=$(cd "$(dirname "$0")/.." && pwd)     # the porthole/ engine root (templates, daemon)
+TMPL="$ENGINE/templates"
+CONF=$(cd "$(dirname "$CONF_ARG")" && pwd)/$(basename "$CONF_ARG")
+[ -f "$CONF" ] || { echo "generate-viewer: no manifest $CONF" >&2; exit 1; }
+CONFDIR=$(dirname "$CONF")
+OUT=$(mkdir -p "${OUT_ARG:-$CONFDIR}" && cd "${OUT_ARG:-$CONFDIR}" && pwd)
+
+# --- Load the manifest -------------------------------------------------------
+# Defaults for optional slots (so an absent key is simply empty/false).
+APP= NAME= PORT= BASE_IMAGE= APT_KEY_URL= APT_REPO= APT_PKGS= EXTRA_PKGS=
+APP_BIN= APP_FLAGS= USER= USER_GROUP= DATADIR= ICON_GLOB= LIFECYCLE=
+AUDIO= PRINTING= PTRACE= DARK_THEME= OPEN_URL= FILE_TRANSFER= NOTIFICATIONS=
+EXTRA_SETUP= ENCODINGS=rgb APT_LIST= EXTRA_ENV= HOST_MOUNTS= TARBALL_URL= TARBALL_BIN= MENU_PRODUCER=
+UPDATE= PACKAGING=
+# shellcheck disable=SC1090
+. "$CONF"
+SLUG=$(basename "$CONF" .conf)   # the conf's basename is authoritative (a manifest SLUG= is ignored)
+: "${APT_LIST:=$SLUG}"   # basename of /etc/apt/sources.list.d/<APT_LIST>.list
+# Display name defaults to "Linux <App>" (honest + trademark-safe); an explicit NAME wins.
+: "${APP:=$NAME}"                 # back-compat: old defs set only NAME
+NAME="${NAME:-Linux $APP}"
+
+# --- update policy (FORCED explicit decision; doctrine slice C + forced-decisions) --
+# UPDATE=pin|float and PACKAGING declare how this app's version is managed. UPDATE has
+# NO default -- every app must declare pin (reproducible, versions in APT_PKGS) or float
+# (install-latest, for self-gating/untrackable apps). The author writes exact versions
+# directly in APT_PKGS (e.g. foo=1.2.3); the gate enforces the declaration matches reality.
+# Tracking/bumping/release (Renovate, release.yml, Sparkle) is remote-side, out of scope here.
+: "${PACKAGING:=debian-apt}"
+case "$PACKAGING" in
+  debian-apt) ;;
+  *) echo "generate-viewer: PACKAGING='$PACKAGING' not supported yet (only debian-apt)" >&2; exit 2 ;;
+esac
+_upd_unpinned= _upd_pinned=
+for _upd_p in $APT_PKGS; do
+  case "$_upd_p" in *=*) _upd_pinned="$_upd_pinned $_upd_p" ;; *) _upd_unpinned="$_upd_unpinned $_upd_p" ;; esac
+done
+case "$UPDATE" in
+  pin)
+    [ -n "$APT_PKGS" ] || { echo "generate-viewer: UPDATE=pin but APT_PKGS is empty (nothing to pin)" >&2; exit 2; }
+    [ -z "$_upd_unpinned" ] || { echo "generate-viewer: UPDATE=pin but these apt packages lack a =version:$_upd_unpinned" >&2; exit 2; }
+    ;;
+  float)
+    [ -z "$_upd_pinned" ] || { echo "generate-viewer: UPDATE=float but these apt packages pin a =version (use UPDATE=pin):$_upd_pinned" >&2; exit 2; }
+    ;;
+  '') echo "generate-viewer: UPDATE must be declared as pin or float in $CONF (no default)" >&2; exit 2 ;;
+  *) echo "generate-viewer: UPDATE='$UPDATE' invalid (expected pin|float)" >&2; exit 2 ;;
+esac
+
+# --- Derived values ----------------------------------------------------------
+HOME="/home/$USER"
+IMAGE="mavericks-$SLUG"
+CONTAINER="$SLUG-gui"
+VOLUME="$SLUG-gui-data"
+APPCONFIG="${DATADIR#/home/$USER/}"          # e.g. .config/Signal
+DATADIR_PARENT=$(dirname "$DATADIR")         # e.g. /home/signal/.config
+BUNDLEID="dev.modernmavericks.porthole.$SLUG"
+CHILD="$SLUG-child.sh"
+STARTGUI="start-$SLUG-gui.sh"
+# ENVPREFIX: the launcher's env-override prefix (SIGNAL_IMAGE, etc.).
+ENVPREFIX=$(printf '%s' "$SLUG" | tr '[:lower:]-' '[:upper:]_')
+# Container lifecycle: FORCED explicit decision (no silent default). ondemand = stop the
+# container when the viewer quits; stayup = keep it running (e.g. it also backs a CLI/agent).
+case "$LIFECYCLE" in
+  ondemand|stayup) ;;
+  '') echo "generate-viewer: LIFECYCLE must be declared as ondemand or stayup in $CONF (no default)" >&2; exit 2 ;;
+  *) echo "generate-viewer: LIFECYCLE='$LIFECYCLE' invalid (expected ondemand|stayup)" >&2; exit 2 ;;
+esac
+# Boolean derivations for #@IF conditions.
+if [ "$AUDIO" ]; then NOAUDIO=; AUDIO_PKG=" pulseaudio"; else NOAUDIO=1; AUDIO_PKG=; fi
+if [ "$LIFECYCLE" = ondemand ]; then LIFECYCLE_ONDEMAND=1; else LIFECYCLE_ONDEMAND=; fi
+# EXTRA_PKGS_SP: EXTRA_PKGS space-prefixed for the --no-install-recommends line
+# (empty when absent, matching AUDIO_PKG). USER_GROUP_ARG: the useradd -g flag.
+if [ "$EXTRA_PKGS" ]; then EXTRA_PKGS_SP=" $EXTRA_PKGS"; else EXTRA_PKGS_SP=; fi
+if [ "$USER_GROUP" ]; then USER_GROUP_ARG=" -g $USER_GROUP"; else USER_GROUP_ARG=; fi
+
+export APP NAME SLUG PORT BASE_IMAGE APT_KEY_URL APT_REPO APT_PKGS EXTRA_PKGS \
+  APP_BIN APP_FLAGS USER USER_GROUP DATADIR ICON_GLOB LIFECYCLE \
+  AUDIO NOAUDIO PRINTING PTRACE DARK_THEME OPEN_URL FILE_TRANSFER NOTIFICATIONS \
+  EXTRA_SETUP ENCODINGS HOME IMAGE CONTAINER VOLUME APPCONFIG DATADIR_PARENT \
+  BUNDLEID CHILD STARTGUI ENVPREFIX LIFECYCLE_ONDEMAND APT_LIST AUDIO_PKG \
+  EXTRA_PKGS_SP USER_GROUP_ARG EXTRA_ENV HOST_MOUNTS TARBALL_URL TARBALL_BIN MENU_PRODUCER \
+  UPDATE PACKAGING
+
+HEADER="# GENERATED by bin/generate-viewer from apps/$SLUG.conf + templates/ -- DO NOT EDIT."
+
+# --- Renderer ----------------------------------------------------------------
+# render <template> <output> [header]
+# Pass 1 (awk): resolve #@IF COND / #@ENDIF against the environment.
+# Pass 2 (awk): substitute @VAR@ tokens from the environment.
+render() {
+  _tmpl="$1"; _out="$2"; _hdr="${3:-}"
+  awk '
+    /^#@IF / {
+      cond = $2
+      keep = (ENVIRON[cond] != "")
+      # nesting not needed for these templates; single level.
+      skip = !keep
+      next
+    }
+    /^#@ENDIF/ { skip = 0; next }
+    { if (!skip) print }
+  ' "$_tmpl" | awk '
+    {
+      line = $0
+      out = ""
+      while (match(line, /@[A-Z_]+@/)) {
+        name = substr(line, RSTART + 1, RLENGTH - 2)
+        out = out substr(line, 1, RSTART - 1) ENVIRON[name]
+        line = substr(line, RSTART + RLENGTH)
+      }
+      print out line
+    }
+  ' > "$_out.tmp"
+  if [ -n "$_hdr" ]; then
+    # Insert the header after a shebang line if present, else at the very top.
+    if IFS= read -r _first < "$_out.tmp" && [ "${_first#\#!}" != "$_first" ]; then
+      { printf '%s\n' "$_first"; printf '%s\n' "$_hdr"; tail -n +2 "$_out.tmp"; } > "$_out"
+    else
+      { printf '%s\n' "$_hdr"; cat "$_out.tmp"; } > "$_out"
+    fi
+  else
+    cat "$_out.tmp" > "$_out"
+  fi
+  rm -f "$_out.tmp"
+}
+
+# --- Emit --------------------------------------------------------------------
+OUTDIR="$OUT/$SLUG"
+BINDIR="$OUT/bin"
+mkdir -p "$OUTDIR" "$BINDIR"
+
+render "$TMPL/Dockerfile.tmpl"  "$OUTDIR/Dockerfile"     "$HEADER"
+render "$TMPL/start-gui.sh.tmpl" "$OUTDIR/$STARTGUI"     "$HEADER"
+render "$TMPL/child.sh.tmpl"    "$OUTDIR/$CHILD"         "$HEADER"
+cp "$TMPL/mac-fonts.conf"       "$OUTDIR/mac-fonts.conf"
+# The AT-SPI menu daemon is a static file COPY'd into a11y-capable images only.
+if [ "$MENU_PRODUCER" ]; then cp "$ENGINE/menu-daemon.py" "$OUTDIR/porthole-menu-daemon.py"; fi
+render "$TMPL/launcher.tmpl"    "$BINDIR/$SLUG"          "$HEADER"
+
+chmod 755 "$OUTDIR/$STARTGUI" "$OUTDIR/$CHILD" "$BINDIR/$SLUG"
+
+# --- CMake args (for the native Porthole viewer build) -------------------------
+# A per-app menu manifest (<confdir>/<slug>.menu.json) is bundled into the .app when present.
+MENU_LINE=
+[ -f "$CONFDIR/$SLUG.menu.json" ] && MENU_LINE="    -DPORTHOLE_MENU_JSON=\"$CONFDIR/$SLUG.menu.json\" \\
+"
+cat <<EOF
+generate-viewer: wrote $OUTDIR/ and $BINDIR/$SLUG
+
+CMake args for the native Porthole viewer:
+  cmake -B build-native-$SLUG -S . \\
+    -DPORTHOLE_APP_NAME="$NAME" \\
+    -DPORTHOLE_APP_SLUG="$SLUG" \\
+    -DPORTHOLE_ICON_CONTAINER="$CONTAINER" \\
+$MENU_LINE    -DPORTHOLE_ICON_GLOB="$ICON_GLOB"
+  cmake --build build-native-$SLUG --target Porthole
+# (bundle id = dev.modernmavericks.porthole.<slug>, from PORTHOLE_APP_SLUG; display name is PORTHOLE_APP_NAME.)
+EOF

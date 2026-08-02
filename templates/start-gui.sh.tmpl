@@ -1,0 +1,53 @@
+#!/bin/sh
+# Entrypoint: ONE @NAME@ instance served by xpra on :100 (for the Porthole native client),
+# on the persistent data volume. xpra provides its own Xvfb; no in-container WM. Optional
+# bridges (printing/CUPS, CAP_SYS_PTRACE, audio, ...) are included below per the manifest.
+set -u
+# xpra binds a Unix-domain socket (not TCP). It lives in the app user's runtime dir
+# (created + chowned below); the launcher's socat bridge -- running as root via
+# `docker exec` -- connects to it by path. No TCP port, nothing network-exposed.
+: "${XPRA_SOCKET:=/run/user/1000/porthole-xpra.sock}"
+: "${XPRA_DISPLAY:=:100}"
+
+# Data volume (@VOLUME@) mounts at @DATADIR@, arrives root-owned.
+mkdir -p @DATADIR@ /run/user/1000
+chown -R @USER@:@USER@ @DATADIR_PARENT@ /run/user/1000
+chmod 700 /run/user/1000
+
+#@IF PRINTING
+# CUPS: xpra forwards print jobs through its own cups backend
+# (/usr/lib/cups/backend/xpraforwarder). cupsd must be running before xpra so
+# xpra can register its virtual PDF/PostScript printer (as the app user, which is
+# in the lpadmin group -> local admin over the socket, no password). Run as root
+# (system daemon); it backgrounds itself.
+mkdir -p /run/cups
+/usr/sbin/cupsd
+_i=0
+while [ "$_i" -lt 20 ] && ! lpstat -r >/dev/null 2>&1; do sleep 0.3; _i=$((_i + 1)); done
+#@ENDIF
+# --encodings matches the Porthole client (rgb is alpha-preserving; no jpeg black
+# margins). open-url + file-transfer are generic bridges (links, attachments).
+#@IF PTRACE
+# setpriv (not runuser) so the app inherits ambient CAP_SYS_PTRACE: it must read a
+# non-dumpable helper's /proc to authenticate a peer (1Password's browser support).
+# The ambient cap survives the uid drop and later execs (xpra, its start-child, app).
+#@ENDIF
+exec env HOME=@HOME@ XDG_RUNTIME_DIR=/run/user/1000 @EXTRA_ENV@\
+  setpriv --reuid @USER@ --regid @USER@ --init-groups \
+#@IF PTRACE
+    --inh-caps +sys_ptrace --ambient-caps +sys_ptrace \
+#@ENDIF
+    -- xpra start "$XPRA_DISPLAY" --daemon=no --bind="$XPRA_SOCKET" \
+       --encodings=@ENCODINGS@ \
+       --open-url=yes --file-transfer=yes \
+#@IF PRINTING
+       --printing=yes \
+#@ENDIF
+#@IF AUDIO
+       --notifications=yes --pulseaudio=yes --speaker=on --mdns=no \
+#@ENDIF
+#@IF NOAUDIO
+       --notifications=yes --pulseaudio=no --mdns=no \
+#@ENDIF
+       --start-child="dbus-run-session -- /usr/local/bin/@CHILD@" \
+       --exit-with-children=yes

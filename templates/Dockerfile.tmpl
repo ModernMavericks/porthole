@@ -1,0 +1,70 @@
+FROM @BASE_IMAGE@
+
+# Common viewer runtime (xpra + its deps, dbus, keyring, notifications, lz4, socat)
+# plus @NAME@'s own package(s). Generated container: only the bridges @NAME@ needs are
+# pulled in (audio/printing/etc. are opt-in per the manifest); no legacy VNC stack.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl gnupg \
+      dbus dbus-x11 util-linux \
+      python3-dbus python3-lz4 \
+      gnome-keyring libsecret-1-0 socat@AUDIO_PKG@@EXTRA_PKGS_SP@ \
+#@IF PRINTING
+      cups python3-cups \
+#@ENDIF
+#@IF MENU_PRODUCER
+      at-spi2-core python3-pyatspi \
+#@ENDIF
+#@IF APT_KEY_URL
+    && curl -sS @APT_KEY_URL@ \
+       | gpg --dearmor -o /usr/share/keyrings/@SLUG@-desktop-keyring.gpg \
+    && echo '@APT_REPO@' \
+       > /etc/apt/sources.list.d/@APT_LIST@.list \
+#@ENDIF
+    # xpra (the display server for the Porthole client) is not in Debian; pull from
+    # xpra.org and PIN it: the Porthole native client is written against a specific
+    # xpra wire protocol, so an unpinned install could drift to an incompatible xpra
+    # on rebuild. xpra.org's trixie repo retains old versions, so this pin is stable.
+    # Bump it only together with the viewer (see op's PORTHOLE_XPRA_VERSION compat check).
+    && curl -sS https://xpra.org/xpra.asc -o /usr/share/keyrings/xpra.asc \
+    && echo 'deb [signed-by=/usr/share/keyrings/xpra.asc] https://xpra.org/ trixie main' \
+       > /etc/apt/sources.list.d/xpra.list \
+    && apt-get update \
+    && apt-get install -y @APT_PKGS@ xpra=6.5.2-r0-1 xvfb \
+    && rm -rf /var/lib/apt/lists/*
+#@IF TARBALL_URL
+
+# Not apt-packaged (e.g. a JetBrains IDE): fetch the upstream tarball, extract to
+# /opt/@SLUG@ (--strip-components=1 drops the versioned top dir so the path is stable),
+# and symlink its launcher onto PATH. TARBALL_URL may be a "latest" redirect.
+RUN mkdir -p /opt/@SLUG@ \
+    && curl -fSL '@TARBALL_URL@' | tar -xz -C /opt/@SLUG@ --strip-components=1 \
+    && ln -sf /opt/@SLUG@/@TARBALL_BIN@ /usr/local/bin/@APP_BIN@
+#@ENDIF
+
+# The app refuses to run as root; give it a real user (Electron apps and 1Password
+# alike). USER_GROUP pins an existing group the app's own package created.
+RUN useradd -m -u 1000@USER_GROUP_ARG@ @USER@
+#@IF PRINTING
+# lpadmin group = CUPS's local admin group, so the app user can register xpra's
+# virtual PDF printer via lpadmin over the local socket without a password.
+RUN usermod -aG lpadmin @USER@
+# xpra's default printer ACL is `-u allow:$USER`, but the xpra server process has
+# no USER in its env (setpriv drops the uid without setting it), so $USER doesn't
+# expand and jobs are denied. Use the documented `allow:all` alternative (this is
+# a single-purpose container).
+RUN sed -i 's|-u allow:[^ ]*|-u allow:all|' /etc/xpra/conf.d/16_printing.conf
+#@ENDIF
+#@IF EXTRA_SETUP
+@EXTRA_SETUP@
+#@ENDIF
+
+COPY start-@SLUG@-gui.sh @CHILD@ /usr/local/bin/
+RUN chmod 755 /usr/local/bin/start-@SLUG@-gui.sh /usr/local/bin/@CHILD@
+#@IF MENU_PRODUCER
+COPY porthole-menu-daemon.py /usr/local/bin/porthole-menu-daemon.py
+RUN chmod 755 /usr/local/bin/porthole-menu-daemon.py
+#@ENDIF
+# Map Mac/CSS system font names to Helvetica Neue (alias only, no font data).
+COPY mac-fonts.conf /etc/fonts/conf.d/09-mac-fonts.conf
+
+ENTRYPOINT ["/usr/local/bin/start-@SLUG@-gui.sh"]

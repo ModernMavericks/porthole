@@ -1,0 +1,49 @@
+#!/bin/sh
+# xpra --start-child: set up a passwordless gnome-keyring (Signal stores its DB
+# encryption key via libsecret/safeStorage, same pattern as 1Password's 2FA token)
+# BEFORE launching Signal. Must run inside dbus-run-session (the entrypoint does that).
+set -u
+: "${HOME:=@HOME@}"
+export HOME
+
+KR="$HOME/@APPCONFIG@/.keyrings"
+mkdir -p "$KR" "$HOME/.local/share"
+ln -sfn "$KR" "$HOME/.local/share/keyrings" 2>/dev/null || {
+  rm -rf "$HOME/.local/share/keyrings"
+  ln -sfn "$KR" "$HOME/.local/share/keyrings"
+}
+if [ ! -e "$KR/default" ]; then
+  printf '[keyring]\ndisplay-name=login\nctime=0\nmtime=0\nlock-on-idle=false\nlock-after=false\n' > "$KR/login.keyring"
+  chmod 600 "$KR/login.keyring"
+  printf login > "$KR/default"
+fi
+eval "$(printf '' | gnome-keyring-daemon --unlock --components=secrets 2>/dev/null)"
+
+#@IF DARK_THEME
+# Dark UI. App popups -- native GTK context menus AND Chromium dropdowns (via
+# Electron's nativeTheme, which on Linux follows the GTK dark preference) -- do NOT
+# follow the app's in-app appearance setting; they follow the GTK theme, which
+# defaults light. Prefer a dark GTK theme so the popups match dark mode.
+# INTERIM: forced dark. TODO: drive from the OS X appearance the Porthole client reports.
+export GTK_THEME="${OP_GTK_THEME:-Adwaita:dark}"
+mkdir -p "$HOME/.config/gtk-3.0"
+printf '[Settings]\ngtk-application-prefer-dark-theme=1\n' > "$HOME/.config/gtk-3.0/settings.ini"
+#@ENDIF
+# Launch the app with its manifest-configured flags. (Electron apps typically need
+# --no-sandbox here -- their setuid sandbox doesn't work in this container; GTK apps
+# usually need none. Set them per-app via APP_FLAGS.)
+#@IF MENU_PRODUCER
+# Live menu bridge: bring up the AT-SPI a11y bus BEFORE the app registers (GTK menu
+# bars need atk-bridge at startup), then start the menu daemon. It polls for the app's
+# menu bar and serves /run/user/1000/porthole-menu.sock. Verified: Thunderbird exposes File/Edit/
+# View/Go/Message/Tools/Help this way even though its menu bar is hidden in the UI.
+export GTK_MODULES=atk-bridge
+/usr/libexec/at-spi-bus-launcher --launch-immediately >/tmp/atspi-bus.log 2>&1 &
+sleep 3
+dbus-send --session --type=method_call --dest=org.a11y.Bus /org/a11y/bus \
+  org.freedesktop.DBus.Properties.Set string:org.a11y.Status string:IsEnabled \
+  variant:boolean:true 2>/dev/null || true
+python3 /usr/local/bin/porthole-menu-daemon.py /run/user/1000/porthole-menu.sock \
+  >/tmp/porthole-menu-daemon.log 2>&1 &
+#@ENDIF
+exec @APP_BIN@ @APP_FLAGS@
