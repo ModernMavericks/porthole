@@ -1,0 +1,7 @@
+docs/
+build*/
+*.pkg
+.*.swp
+.tmp-claude/
+._*
+.DS_Store
