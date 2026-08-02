@@ -58,6 +58,11 @@ install -d "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources/bin"
 install -m 0755 "$STAGE/bin/$SLUG" "$BUNDLE/Contents/Resources/bin/$SLUG"
 cp -R "$STAGE/$SLUG" "$BUNDLE/Contents/Resources/$SLUG"
 
+# A per-app menu manifest (<confdir>/<slug>.menu.json) becomes Resources/menu.json, which the engine
+# reads at launch to build the app's native menu bar. Absent -> the default App/Edit/Window only.
+_menu="$(dirname "$CONF")/$SLUG.menu.json"
+[ -f "$_menu" ] && install -m 0644 "$_menu" "$BUNDLE/Contents/Resources/menu.json"
+
 # CFBundleExecutable stub: a double-click runs the real launcher in Resources/bin.
 cat > "$BUNDLE/Contents/MacOS/$SLUG" <<EOF
 #!/bin/sh
