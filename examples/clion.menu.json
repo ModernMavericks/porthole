@@ -1,0 +1,88 @@
+{
+  "_comment": "CLion (JetBrains, Linux keymap) menus, inserted between the engine's default Edit and Window. 'send' is the LINUX shortcut forwarded to the container CLion (clicking always works); 'key'(+shift/alt) is an optional Mac Cmd-shortcut (chosen conflict-free vs the default Cut/Copy/Paste/Quit/etc.). F-key / Shift-F-key actions have no clean Cmd-equivalent -> click-only. Alt+Insert items (Generate/New) are omitted for now (Insert isn't in the client keymap yet).",
+  "menus": [
+    {
+      "title": "File",
+      "items": [
+        {"title": "Save All", "key": "s", "send": "ctrl+s"},
+        {"title": "Reload All from Disk", "send": "ctrl+alt+y"},
+        {"separator": true},
+        {"title": "Settings…", "key": "comma", "send": "ctrl+alt+s"}
+      ]
+    },
+    {
+      "title": "Find",
+      "items": [
+        {"title": "Find…", "key": "f", "send": "ctrl+f"},
+        {"title": "Replace…", "key": "r", "send": "ctrl+r"},
+        {"title": "Find in Files…", "key": "f", "shift": true, "send": "ctrl+shift+f"},
+        {"title": "Replace in Files…", "key": "r", "shift": true, "send": "ctrl+shift+r"},
+        {"separator": true},
+        {"title": "Find Usages", "send": "alt+F7"}
+      ]
+    },
+    {
+      "title": "View",
+      "items": [
+        {"title": "Recent Files", "key": "e", "send": "ctrl+e"},
+        {"title": "Recent Locations", "key": "e", "shift": true, "send": "ctrl+shift+e"},
+        {"title": "Quick Documentation", "send": "ctrl+q"},
+        {"title": "Quick Definition", "send": "ctrl+shift+i"}
+      ]
+    },
+    {
+      "title": "Navigate",
+      "items": [
+        {"title": "Class…", "key": "o", "send": "ctrl+n"},
+        {"title": "File…", "key": "o", "shift": true, "send": "ctrl+shift+n"},
+        {"title": "Symbol…", "key": "o", "alt": true, "send": "ctrl+alt+shift+n"},
+        {"title": "Line/Column…", "key": "l", "send": "ctrl+g"},
+        {"separator": true},
+        {"title": "Declaration or Usages", "key": "b", "send": "ctrl+b"},
+        {"title": "Type Declaration", "key": "b", "shift": true, "send": "ctrl+shift+b"},
+        {"separator": true},
+        {"title": "Back", "send": "ctrl+alt+Left"},
+        {"title": "Forward", "send": "ctrl+alt+Right"}
+      ]
+    },
+    {
+      "title": "Code",
+      "items": [
+        {"title": "Reformat Code", "key": "l", "alt": true, "send": "ctrl+alt+l"},
+        {"title": "Comment with Line Comment", "key": "slash", "send": "ctrl+slash"},
+        {"title": "Override Methods…", "send": "ctrl+o"},
+        {"title": "Implement Methods…", "send": "ctrl+i"},
+        {"title": "Complete Current Statement", "send": "ctrl+shift+Return"}
+      ]
+    },
+    {
+      "title": "Refactor",
+      "items": [
+        {"title": "Rename…", "send": "shift+F6"},
+        {"title": "Change Signature…", "send": "ctrl+F6"},
+        {"title": "Extract Method…", "send": "ctrl+alt+m"},
+        {"title": "Extract Variable…", "send": "ctrl+alt+v"},
+        {"title": "Refactor This…", "send": "ctrl+alt+shift+t"}
+      ]
+    },
+    {
+      "title": "Build",
+      "items": [
+        {"title": "Build Project", "send": "ctrl+F9"},
+        {"title": "Rebuild Project", "send": "ctrl+shift+F9"}
+      ]
+    },
+    {
+      "title": "Run",
+      "items": [
+        {"title": "Run", "send": "shift+F10"},
+        {"title": "Debug", "send": "shift+F9"},
+        {"title": "Stop", "send": "ctrl+F2"},
+        {"separator": true},
+        {"title": "Toggle Breakpoint", "send": "ctrl+F8"},
+        {"title": "Step Over", "send": "F8"},
+        {"title": "Step Into", "send": "F7"}
+      ]
+    }
+  ]
+}
