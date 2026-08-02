@@ -17,7 +17,10 @@ REBUILD=0
 PORTHOLE_XPRA_VERSION="${@ENVPREFIX@_XPRA_VERSION:-6.5}"   # major.minor the viewer speaks
 
 _root=$(cd "$(dirname "$0")/.." && pwd)
-APP="${@ENVPREFIX@_APP:-$_root/build-native-@SLUG@/porthole/viewer/Porthole.app}"
+# The Porthole viewer ENGINE is a single installed app shared by every materialized
+# viewer (a "Linux <App>.app" is a thin wrapper around it); default to the installed
+# location, overridable via @ENVPREFIX@_APP for dev/test.
+APP="${@ENVPREFIX@_APP:-/Applications/Porthole.app}"
 
 die() { echo "@SLUG@: $*" >&2; exit 1; }
 
@@ -146,7 +149,7 @@ if ! { [ -f "$MENU_TUNNEL_PID" ] && ps -p "$(cat "$MENU_TUNNEL_PID")" >/dev/null
   echo $! > "$MENU_TUNNEL_PID"
 fi
 
-[ -d "$APP" ] || die "@NAME@ viewer app not found at $APP (build it: see the Phase 1 plan Task 6)"
+[ -d "$APP" ] || die "the Porthole viewer engine wasn't found at $APP -- install Porthole.app (https://github.com/ModernMavericks/porthole), or set @ENVPREFIX@_APP"
 open "$APP" --args "$XPRA_SOCK" || die "could not launch the @NAME@ viewer"
 echo "@NAME@ viewer: launched -> $XPRA_SOCK (container stops when you Quit the viewer)"
 

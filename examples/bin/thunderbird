@@ -18,7 +18,10 @@ REBUILD=0
 PORTHOLE_XPRA_VERSION="${THUNDERBIRD_XPRA_VERSION:-6.5}"   # major.minor the viewer speaks
 
 _root=$(cd "$(dirname "$0")/.." && pwd)
-APP="${THUNDERBIRD_APP:-$_root/build-native-thunderbird/porthole/viewer/Porthole.app}"
+# The Porthole viewer ENGINE is a single installed app shared by every materialized
+# viewer (a "Linux <App>.app" is a thin wrapper around it); default to the installed
+# location, overridable via THUNDERBIRD_APP for dev/test.
+APP="${THUNDERBIRD_APP:-/Applications/Porthole.app}"
 
 die() { echo "thunderbird: $*" >&2; exit 1; }
 
@@ -147,7 +150,7 @@ if ! { [ -f "$MENU_TUNNEL_PID" ] && ps -p "$(cat "$MENU_TUNNEL_PID")" >/dev/null
   echo $! > "$MENU_TUNNEL_PID"
 fi
 
-[ -d "$APP" ] || die "Linux Thunderbird viewer app not found at $APP (build it: see the Phase 1 plan Task 6)"
+[ -d "$APP" ] || die "the Porthole viewer engine wasn't found at $APP -- install Porthole.app (https://github.com/ModernMavericks/porthole), or set THUNDERBIRD_APP"
 open "$APP" --args "$XPRA_SOCK" || die "could not launch the Linux Thunderbird viewer"
 echo "Linux Thunderbird viewer: launched -> $XPRA_SOCK (container stops when you Quit the viewer)"
 
