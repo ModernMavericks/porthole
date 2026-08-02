@@ -1,0 +1,4 @@
+#!/bin/sh
+printf 'socat %s\n' "$*" >> "$STUB_LOG"
+# background listener stub: record a fake pid and exit immediately
+echo $$ > "$STUB_DIR/socat.pid"

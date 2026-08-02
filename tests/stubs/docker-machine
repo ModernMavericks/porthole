@@ -1,0 +1,12 @@
+#!/bin/sh
+printf 'docker-machine %s\n' "$*" >> "$STUB_LOG"
+if [ -f "$STUB_DIR/docker-machine.fail" ]; then
+  echo 'Host does not exist: "default"' >&2
+  exit 1
+fi
+cat <<'EOF'
+export DOCKER_TLS_VERIFY="1"
+export DOCKER_HOST="tcp://192.0.2.99:2376"
+export DOCKER_CERT_PATH="/tmp/1p-test-certs"
+export DOCKER_MACHINE_NAME="default"
+EOF

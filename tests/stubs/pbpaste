@@ -1,0 +1,2 @@
+#!/bin/sh
+cat "$CLIPBOARD_FILE" 2>/dev/null || :

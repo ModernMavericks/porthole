@@ -1,0 +1,5 @@
+#!/bin/sh
+# Stub pgrep: the viewer is "present" unless the test created pgrep.gone.
+printf 'pgrep %s\n' "$*" >> "$STUB_LOG"
+[ -f "$STUB_DIR/pgrep.gone" ] && exit 1
+exit 0

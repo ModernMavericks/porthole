@@ -1,0 +1,22 @@
+#!/bin/sh
+# Stub docker: logs the invocation, replays canned stdout/stderr/exit by call
+# number from $STUB_DIR/docker.{stdout,stderr,exit}[.N] (N = 1-based call
+# count; unsuffixed file is the default for calls without a numbered file).
+printf 'docker %s\n' "$*" >> "$STUB_LOG"
+# `docker context inspect <name>`: succeed only when a marker file says that context exists
+# ($STUB_DIR/docker-context.<name>). Absent marker => exit 1, so op takes the legacy
+# docker-machine env fallback. Does not consume a numbered stdout/exit replay slot.
+if [ "${1:-}" = context ] && [ "${2:-}" = inspect ]; then
+  [ -f "$STUB_DIR/docker-context.${3:-}" ] && exit 0
+  exit 1
+fi
+_n=$(cat "$STUB_DIR/docker.calls" 2>/dev/null || echo 0)
+_n=$((_n + 1))
+echo "$_n" > "$STUB_DIR/docker.calls"
+_out="$STUB_DIR/docker.stdout.$_n"; [ -f "$_out" ] || _out="$STUB_DIR/docker.stdout"
+_err="$STUB_DIR/docker.stderr.$_n"; [ -f "$_err" ] || _err="$STUB_DIR/docker.stderr"
+_rc="$STUB_DIR/docker.exit.$_n";   [ -f "$_rc" ]  || _rc="$STUB_DIR/docker.exit"
+[ -f "$_out" ] && cat "$_out"
+[ -f "$_err" ] && cat "$_err" >&2
+[ -f "$_rc" ] && exit "$(cat "$_rc")"
+exit 0
