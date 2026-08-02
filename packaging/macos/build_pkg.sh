@@ -22,7 +22,7 @@ resolve_msc() {
 
 # Locate the built Porthole.app (arg wins; else a conventional build dir).
 if [ -z "$APP_IN" ]; then
-  for d in "$REPO/build/viewer/Porthole.app" "$REPO/build-native/viewer/Porthole.app"; do
+  for d in "$REPO/_build/viewer/Porthole.app" "$REPO/build-native/viewer/Porthole.app"; do
     [ -d "$d" ] && { APP_IN="$d"; break; }
   done
 fi

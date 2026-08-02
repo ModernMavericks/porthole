@@ -10,7 +10,14 @@ cmake_minimum_required(VERSION 3.16)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.9" CACHE STRING "Minimum macOS version")
 set(CMAKE_OSX_ARCHITECTURES "x86_64" CACHE STRING "Target architectures")
 
-file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PORTHOLE_VERSION LIMIT_COUNT 1)
+# VERSION is a build product (<version>-mavericks.N), gitignored and written by release.yml or a
+# local `sh build/version.sh auto`. A dev `cmake -S .` with no VERSION yet gets 0.0.0 -- so the
+# standalone build stays hermetic (no VERSION needed) while a release stamps the real one.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
+  file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PORTHOLE_VERSION LIMIT_COUNT 1)
+else()
+  set(PORTHOLE_VERSION "0.0.0")
+endif()
 project(porthole VERSION ${PORTHOLE_VERSION} LANGUAGES OBJC)
 
 # Porthole's OWN identity (not a per-app viewer). The viewer sub-build defaults these to
