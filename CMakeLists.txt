@@ -10,9 +10,8 @@ cmake_minimum_required(VERSION 3.16)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.9" CACHE STRING "Minimum macOS version")
 set(CMAKE_OSX_ARCHITECTURES "x86_64" CACHE STRING "Target architectures")
 
-# VERSION is a build product (<version>-mavericks.N), gitignored and written by release.yml or a
-# local `sh build/version.sh auto`. A dev `cmake -S .` with no VERSION yet gets 0.0.0 -- so the
-# standalone build stays hermetic (no VERSION needed) while a release stamps the real one.
+# VERSION is the committed source of truth (plain semver, like mavericks-shared-cmake): bump it to
+# cut a release. The EXISTS guard keeps a stray checkout without it building (0.0.0) rather than erroring.
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
   file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PORTHOLE_VERSION LIMIT_COUNT 1)
 else()

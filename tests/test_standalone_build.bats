@@ -16,5 +16,5 @@ teardown() {
 
 @test "porthole configures as a standalone top-level project" {
   run cmake -S "$REPO_ROOT" -B "$BUILD_DIR"
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 0 ] || { echo "cmake configure failed (status $status):"; echo "$output"; return 1; }
 }

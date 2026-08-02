@@ -1,12 +1,8 @@
 docs/
-# CMake output dirs only -- NOT build/ (that holds the committed version wrappers, like golang).
+# CMake output dirs.
 /_build/
 build-*/
 *.pkg
-
-# Full package version (<version>-mavericks.N): a build product written by release.yml or a
-# local `sh build/version.sh auto` run -- never committed. UPSTREAM_VERSION is committed instead.
-/VERSION
 /dist/
 .*.swp
 .tmp-claude/
