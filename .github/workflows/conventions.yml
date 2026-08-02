@@ -1,0 +1,15 @@
+name: conventions
+
+# The family conventions gate: a thin caller of the shared reusable workflow. Checks every
+# convention in shared-cmake's check-family-conventions.sh (including ones added later) -- this
+# caller never changes.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  conventions:
+    uses: ModernMavericks/shared-cmake/.github/workflows/family-conventions.yml@v1

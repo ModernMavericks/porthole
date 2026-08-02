@@ -8,3 +8,7 @@ build-*/
 .tmp-claude/
 ._*
 .DS_Store
+
+# VERSION is a build product (<date>.N), stamped by release.yml -- never committed. UPSTREAM_VERSION (the date) is.
+/VERSION
+/dist/

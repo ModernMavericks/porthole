@@ -10,10 +10,13 @@ cmake_minimum_required(VERSION 3.16)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.9" CACHE STRING "Minimum macOS version")
 set(CMAKE_OSX_ARCHITECTURES "x86_64" CACHE STRING "Target architectures")
 
-# VERSION is the committed source of truth (plain semver, like mavericks-shared-cmake): bump it to
-# cut a release. The EXISTS guard keeps a stray checkout without it building (0.0.0) rather than erroring.
+# Porthole is its own upstream, versioned by DATE: a release is <YYYYMMDD>.N (N per day). release.yml
+# stamps VERSION (a gitignored build product) with it. A dev build with no VERSION falls back to the
+# committed UPSTREAM_VERSION (the bare date), then 0.0.0 -- so the standalone build stays hermetic.
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
   file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PORTHOLE_VERSION LIMIT_COUNT 1)
+elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/UPSTREAM_VERSION")
+  file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/UPSTREAM_VERSION" PORTHOLE_VERSION LIMIT_COUNT 1)
 else()
   set(PORTHOLE_VERSION "0.0.0")
 endif()

@@ -1,11 +1,11 @@
 name: release
 
-# Porthole is versioned like mavericks-shared-cmake: plain vX.Y.Z from the committed VERSION file
-# (NOT the <upstream>-mavericks.N port scheme -- Porthole ports nothing). Bump VERSION to cut a
-# release. On push to main this builds Porthole.app + the Sparkle updater into a signed .pkg and,
-# if vX.Y.Z has not been published yet, creates the GitHub Release at tag vX.Y.Z with the pkg +
-# appcast, moves the @vMAJOR ingredient tag, and refreshes the update feed. PRs just build + test.
-# No 10.9 runner anywhere; artifacts are re-validated on a real 10.9 box out-of-band.
+# Porthole is a Mavericks app that IS its own upstream, so it is versioned by DATE with no
+# -mavericks suffix: UPSTREAM_VERSION is the date YYYYMMDD, and a release is YYYYMMDD.N (N counts
+# the releases cut that day, starting at .1). push/PR to main build + test only; a manual
+# workflow_dispatch cuts + publishes a release stamped with today's next .N. Build -> signed .pkg +
+# Sparkle appcast -> the shared publish-release.yml (which mints the tag, checksums, notes body) ->
+# refresh the fixed-URL update feed. No 10.9 runner; artifacts re-validated on a real 10.9 box.
 
 on:
   push:
@@ -17,40 +17,44 @@ on:
 permissions:
   contents: write
 
-# Two publishes racing the same tag is a corrupt release, not a flaky build.
+# Do not cancel a dispatch (it publishes): all dispatches share ONE group -- a version-bump lock, so
+# two cannot cut the same .N. A dispatch and an ordinary main build use different groups and never
+# cancel each other.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && 'publish' || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
   build:
     runs-on: macos-26   # Apple Silicon (arm64), cross-targets 10.9; use macos-15 if 26 is unavailable
+    outputs:
+      ver: ${{ steps.ver.outputs.ver }}
+      publish: ${{ steps.ver.outputs.publish }}
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0
+          fetch-depth: 0   # the .N counter reads existing <date>.* tags
 
       - name: Install mavericks-shared-cmake
         uses: ModernMavericks/shared-cmake/.github/actions/install@v1
 
-      - name: Version + publish decision
+      - name: Version (YYYYMMDD.N) + publish decision
         id: ver
         run: |
           set -eu
-          ver="$(tr -d '[:space:]' < VERSION)"
-          tag="v$ver"; major="v${ver%%.*}"
+          base="$(tr -d '[:space:]' < UPSTREAM_VERSION)"   # the date, e.g. 20260802
+          # N = 1 + the highest existing <base>.N among the shipped tags (first release of a day = .1).
+          maxn=0
+          for t in $(git tag --list "$base.*"); do
+            n="${t##*.}"
+            case "$n" in ''|*[!0-9]*) : ;; *) [ "$n" -gt "$maxn" ] && maxn="$n" ;; esac
+          done
+          ver="$base.$((maxn + 1))"
           pub=no
-          if [ "$GITHUB_REF_NAME" = main ] && [ "$GITHUB_EVENT_NAME" != pull_request ]; then
-            if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              echo "$tag already released -- build only"
-            else
-              pub=yes
-            fi
-          fi
-          { echo "ver=$ver"; echo "tag=$tag"; echo "major=$major"; echo "publish=$pub"; } >> "$GITHUB_OUTPUT"
-          echo "version=$ver tag=$tag publish=$pub"
-        env:
-          GH_TOKEN: ${{ github.token }}
+          [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && pub=yes
+          printf '%s\n' "$ver" > VERSION
+          { echo "ver=$ver"; echo "publish=$pub"; } >> "$GITHUB_OUTPUT"
+          echo "version=$ver publish=$pub"
 
       - name: Run the repo's tests
         run: sh "$MSC_SCRIPTS/run-repo-tests.sh"
@@ -78,39 +82,65 @@ jobs:
         run: |
           set -eu
           [ -n "$SPARKLE_PRIVATE_KEY" ] || { echo "::error::SPARKLE_PRIVATE_KEY secret not set"; exit 1; }
-          VER="${{ steps.ver.outputs.ver }}"; TAG="${{ steps.ver.outputs.tag }}"
+          VER="${{ steps.ver.outputs.ver }}"
           PKG="$(ls dist/porthole-*.pkg | head -1)"
-          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/$TAG"
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/$VER"
           sh "$MSC_SCRIPTS/sign_and_appcast.sh" \
             --channel-title "Porthole" --version "$VER" \
             --pkg-url "$base/$(basename "$PKG")" --notes-file release-notes/README.md \
             --pkg "$PKG" --min-os 10.9 > dist/appcast.xml
           echo "=== appcast.xml ==="; cat dist/appcast.xml
 
-      - name: Publish the release + move the @vMAJOR ingredient tag + refresh the feed
-        if: steps.ver.outputs.publish == 'yes'
+      - name: Collect the release-notes body into the artifact
+        run: |
+          set -eu
+          # The body travels IN the artifact: publish-release.yml does not check out the repo.
+          if [ -s release-notes/README.md ]; then cp release-notes/README.md dist/RELEASE_NOTES.md
+          else printf '## Porthole %s\n\nAutomated release.\n' "${{ steps.ver.outputs.ver }}" > dist/RELEASE_NOTES.md; fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: porthole
+          path: dist/*
+
+  # All-or-nothing publish: the ONLY writer to Releases, gated on the build. The shared workflow
+  # regenerates SHA256SUMS, uses RELEASE_NOTES.md from the artifact as the body (failing if missing
+  # or empty), and mints the tag at this commit (a dispatch-cut tag pushed by GITHUB_TOKEN triggers
+  # nothing, so the publisher must mint it inline).
+  publish:
+    needs: build
+    if: needs.build.outputs.publish == 'yes'
+    permissions:
+      contents: write
+    uses: ModernMavericks/shared-cmake/.github/workflows/publish-release.yml@v1
+    with:
+      version: ${{ needs.build.outputs.ver }}
+      artifact: porthole
+
+  # The fixed-URL update FEED: Sparkle installs poll it, so it cannot be /latest/. A feed-porthole
+  # prerelease holds the appcast; its asset is replaced every release, the tag never moves.
+  feed:
+    needs: [build, publish]
+    if: needs.build.outputs.publish == 'yes'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: porthole
+          path: dist
+      - name: Point feed-porthole at ${{ needs.build.outputs.ver }}
         env:
           GH_TOKEN: ${{ github.token }}
           R: ${{ github.repository }}
-          TAG: ${{ steps.ver.outputs.tag }}
-          MAJOR: ${{ steps.ver.outputs.major }}
+          VER: ${{ needs.build.outputs.ver }}
         run: |
           set -eu
-          NOTES="release-notes/${TAG}.md"; [ -f "$NOTES" ] || NOTES="release-notes/README.md"
-          ( cd dist && shasum -a 256 porthole-*.pkg appcast.xml > SHA256SUMS )
-          # gh release create mints the immutable tag $TAG at this commit and attaches the assets.
-          gh release create "$TAG" --repo "$R" --target "$GITHUB_SHA" \
-            --title "Porthole $TAG" --notes-file "$NOTES" \
-            dist/porthole-*.pkg dist/appcast.xml dist/SHA256SUMS
-          # Move the @vMAJOR ingredient tag (consumers pin the porthole install action at @vMAJOR).
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -f -a "$MAJOR" -m "$MAJOR -> $TAG" "$GITHUB_SHA"
-          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${R}.git" "$MAJOR"
-          # Fixed-URL update feed for Sparkle (its asset is replaced every release; the tag never moves).
+          ls dist/appcast.xml >/dev/null   # a feed with no appcast is a broken product
           if ! gh release view "feed-porthole" --repo "$R" >/dev/null 2>&1; then
             gh release create "feed-porthole" --repo "$R" --prerelease --title "Porthole update feed" \
               --notes "Sparkle appcast for Porthole; asset replaced every release, tag never moves."
           fi
           gh release upload "feed-porthole" --repo "$R" dist/appcast.xml --clobber
-          echo "published $TAG, moved $MAJOR, refreshed feed-porthole"
+          echo "feed-porthole now serves $VER"
