@@ -83,6 +83,7 @@ pkgbuild --root "$ROOT" \
     --install-location / \
     "$COMPONENT_DIR/porthole-component.pkg"
 
+mkdir -p "$(dirname "$OUT")"
 productbuild --distribution "$HERE/distribution.xml" \
     --package-path "$COMPONENT_DIR" \
     "$OUT"
