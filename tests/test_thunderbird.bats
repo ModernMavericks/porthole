@@ -43,19 +43,20 @@ EOF
   printf '#!/bin/sh\nexit 0\n' > "$tmp/socat"
   printf '#!/bin/sh\nexit 0\n' > "$tmp/docker-machine"
   chmod +x "$tmp"/docker "$tmp"/open "$tmp"/socat "$tmp"/docker-machine
-  mkdir -p "$tmp/app/build-native-thunderbird/porthole/viewer/Porthole.app"
+  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$tmp/viewer"; chmod +x "$tmp/viewer"
   run env PATH="$tmp:$PATH" THUNDERBIRD_NO_PREFLIGHT=1 \
-        THUNDERBIRD_APP="$tmp/app/build-native-thunderbird/porthole/viewer/Porthole.app" \
+        THUNDERBIRD_VIEWER_BIN="$tmp/viewer" \
         "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  grep -q 'open .*Porthole.app --args .*/thunderbird-xpra.sock' "$tmp/log" || { cat "$tmp/log"; return 1; }
-  [[ "$output" == *"launched -> "*"/thunderbird-xpra.sock"* ]] || return 1
+  # the launcher execs its OWN viewer binary in place (distinct app), passing the xpra sock
+  [[ "$output" == *"viewer-exec "*"/thunderbird-xpra.sock"* ]] || { echo "$output"; return 1; }
+  [[ "$output" == *"launching -> "*"/thunderbird-xpra.sock"* ]] || return 1
 }
 
 @test "bin/thunderbird auto-recovers the viewer on a lost backend (marker)" {
   b="${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
   grep -q 'MARKER="${XPRA_SOCK%-xpra.sock}-viewer-lost"' "$b" || return 1
-  grep -q 'RW_RELAUNCH="$0"' "$b" || return 1       # recovery re-invokes the launcher
+  grep -q 'RW_RELAUNCH="open ' "$b" || return 1     # recovery re-opens the .app (keeps its identity)
   grep -q 'porthole-recover-watch' "$b" || return 1
 }
 

@@ -50,11 +50,11 @@ EOF
   printf '#!/bin/sh\nexit 0\n' > "$tmp/socat"
   printf '#!/bin/sh\nexit 0\n' > "$tmp/docker-machine"
   chmod +x "$tmp"/docker "$tmp"/open "$tmp"/socat "$tmp"/docker-machine
-  mkdir -p "$tmp/app/build-native-clion/porthole/viewer/Porthole.app"
+  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$tmp/viewer"; chmod +x "$tmp/viewer"
   run env PATH="$tmp:$PATH" CLION_NO_PREFLIGHT=1 \
-        CLION_APP="$tmp/app/build-native-clion/porthole/viewer/Porthole.app" \
+        CLION_VIEWER_BIN="$tmp/viewer" \
         "${BATS_TEST_DIRNAME}/../examples/bin/clion"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
-  grep -q 'open .*Porthole.app --args .*/clion-xpra.sock' "$tmp/log" || { cat "$tmp/log"; return 1; }
+  [[ "$output" == *"viewer-exec "*"/clion-xpra.sock"* ]] || { echo "$output"; return 1; }
   grep -q '${CLION_MOUNTS:-}' "${BATS_TEST_DIRNAME}/../examples/bin/clion" || return 1
 }

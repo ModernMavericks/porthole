@@ -38,7 +38,15 @@ teardown() {
   [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$P")" = "dev.modernmavericks.porthole.thunderbird" ]
 }
 
-@test "the materialized launcher points at the shared installed engine" {
-  "$ENGINE/bin/porthole" materialize "$ENGINE/examples/thunderbird.conf" --apps-dir "$APPS" >/dev/null
-  grep -q '/Applications/Porthole.app' "$APPS/Linux Thunderbird.app/Contents/Resources/bin/thunderbird"
+@test "the app carries its OWN engine binary + recovery watcher and execs it in place" {
+  # A copied binary makes each materialized app a distinct LaunchServices app (own icon/name/instance),
+  # so several viewers can run at once -- rather than all reactivating one shared Porthole.app.
+  fake="$APPS/fake-engine"; printf '#!/bin/sh\nexit 0\n' > "$fake"; chmod +x "$fake"
+  PORTHOLE_ENGINE_BIN="$fake" "$ENGINE/bin/porthole" \
+    materialize "$ENGINE/examples/thunderbird.conf" --apps-dir "$APPS" >/dev/null
+  B="$APPS/Linux Thunderbird.app/Contents"
+  [ -x "$B/MacOS/Porthole" ]                                 # its own copy of the viewer engine binary
+  [ -x "$B/Resources/bin/porthole-recover-watch" ]          # the recovery watcher, bundled
+  grep -q 'exec "$_bin" "$XPRA_SOCK"' "$B/Resources/bin/thunderbird"   # runs it IN PLACE
+  ! grep -q 'open "$APP"' "$B/Resources/bin/thunderbird"              # not `open` of a shared app
 }

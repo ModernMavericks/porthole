@@ -17,9 +17,9 @@ esac
 exit 0
 EOF
   chmod +x "$d"/*
-  mkdir -p "$d/app/build-native-thunderbird/porthole/viewer/Porthole.app"
+  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"; chmod +x "$d/viewer"
   run env DOCKER_HOST=tcp://192.0.2.1:2376 CREATED="$1" HOME="$d/home" PATH="$d:$PATH" \
-      THUNDERBIRD_APP="$d/app/build-native-thunderbird/porthole/viewer/Porthole.app" \
+      THUNDERBIRD_VIEWER_BIN="$d/viewer" \
       "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
   rm -rf "$d"
 }
@@ -47,9 +47,9 @@ case "$*" in *"inspect -f"*) echo true ;; *) : ;; esac
 exit 0
 EOF
   chmod +x "$d"/*
-  mkdir -p "$d/app/build-native-thunderbird/porthole/viewer/Porthole.app"
+  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"; chmod +x "$d/viewer"
   run env DOCKER_HOST=tcp://192.0.2.1:2376 LOGF="$d/log" HOME="$d/home" PATH="$d:$PATH" \
-      THUNDERBIRD_APP="$d/app/build-native-thunderbird/porthole/viewer/Porthole.app" \
+      THUNDERBIRD_VIEWER_BIN="$d/viewer" \
       "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird" --rebuild
   grep -q 'build --no-cache' "$d/log" || { cat "$d/log"; rm -rf "$d"; return 1; }
   grep -q 'rm -f thunderbird-gui' "$d/log" || { cat "$d/log"; rm -rf "$d"; return 1; }
@@ -71,9 +71,9 @@ esac
 exit 0
 EOF
   chmod +x "$d"/*
-  mkdir -p "$d/app/build-native-thunderbird/porthole/viewer/Porthole.app"
+  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"; chmod +x "$d/viewer"
   run env DOCKER_HOST=tcp://192.0.2.1:2376 XV="$1" HOME="$d/home" PATH="$d:$PATH" \
-      THUNDERBIRD_APP="$d/app/build-native-thunderbird/porthole/viewer/Porthole.app" \
+      THUNDERBIRD_VIEWER_BIN="$d/viewer" \
       "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
   rm -rf "$d"
 }

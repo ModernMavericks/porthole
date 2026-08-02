@@ -63,6 +63,18 @@ cp -R "$STAGE/$SLUG" "$BUNDLE/Contents/Resources/$SLUG"
 _menu="$(dirname "$CONF")/$SLUG.menu.json"
 [ -f "$_menu" ] && install -m 0644 "$_menu" "$BUNDLE/Contents/Resources/menu.json"
 
+# This app's OWN copy of the viewer engine binary + the recovery watcher. The copied binary is what
+# makes the materialized app a DISTINCT LaunchServices app -- its own icon, name, and instance -- so
+# several viewers run at once, each as itself, instead of all reactivating one shared Porthole.app.
+# $ENGINE is the installed Porthole.app's Contents/Resources/engine, so the binary is ../../MacOS.
+ENGINE_BIN="${PORTHOLE_ENGINE_BIN:-$ENGINE/../../MacOS/Porthole}"
+if [ -x "$ENGINE_BIN" ]; then
+  install -m 0755 "$ENGINE_BIN" "$BUNDLE/Contents/MacOS/Porthole"
+else
+  echo "porthole: engine binary not at $ENGINE_BIN -- the app won't launch until re-materialized with Porthole installed" >&2
+fi
+install -m 0755 "$ENGINE/bin/porthole-recover-watch" "$BUNDLE/Contents/Resources/bin/porthole-recover-watch"
+
 # CFBundleExecutable stub: a double-click runs the real launcher in Resources/bin.
 cat > "$BUNDLE/Contents/MacOS/$SLUG" <<EOF
 #!/bin/sh

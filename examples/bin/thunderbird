@@ -17,11 +17,7 @@ REBUILD=0
 [ "${1:-}" = --rebuild ] && REBUILD=1
 PORTHOLE_XPRA_VERSION="${THUNDERBIRD_XPRA_VERSION:-6.5}"   # major.minor the viewer speaks
 
-_root=$(cd "$(dirname "$0")/.." && pwd)
-# The Porthole viewer ENGINE is a single installed app shared by every materialized
-# viewer (a "Linux <App>.app" is a thin wrapper around it); default to the installed
-# location, overridable via THUNDERBIRD_APP for dev/test.
-APP="${THUNDERBIRD_APP:-/Applications/Porthole.app}"
+_root=$(cd "$(dirname "$0")/.." && pwd)   # Contents/Resources of the materialized app
 
 die() { echo "thunderbird: $*" >&2; exit 1; }
 
@@ -150,24 +146,30 @@ if ! { [ -f "$MENU_TUNNEL_PID" ] && ps -p "$(cat "$MENU_TUNNEL_PID")" >/dev/null
   echo $! > "$MENU_TUNNEL_PID"
 fi
 
-[ -d "$APP" ] || die "the Porthole viewer engine wasn't found at $APP -- install Porthole.app (https://github.com/ModernMavericks/porthole), or set THUNDERBIRD_APP"
-open "$APP" --args "$XPRA_SOCK" || die "could not launch the Linux Thunderbird viewer"
-echo "Linux Thunderbird viewer: launched -> $XPRA_SOCK (container stops when you Quit the viewer)"
+# This viewer runs its OWN copy of the Porthole engine binary, IN PLACE (exec, not `open` of a shared
+# app) -- so the running process IS this bundle: its own icon, name, and LaunchServices instance. That
+# is what lets several materialized viewers (Signal, 1Password, ...) run at once, each as itself,
+# instead of all reactivating one shared Porthole.app. The engine CODE is shared (materialize copied it
+# from the installed Porthole.app); the IDENTITY is this bundle's. $_root is Contents/Resources.
+_bin="${THUNDERBIRD_VIEWER_BIN:-$_root/../MacOS/Porthole}"   # override for dev/test
+_appbundle="$(cd "$_root/../.." && pwd)"
+[ -x "$_bin" ] || die "the Linux Thunderbird viewer binary is missing -- reinstall Porthole + this app, or re-run: porthole materialize"
 
-# Auto-recovery: a detached watcher relaunches the viewer if it dies from a lost backend
-# (VM reboot / container restart / tunnel drop), and -- for on-demand containers -- stops
-# the container on a real Quit. Recovery re-invokes THIS launcher (idempotent), so the
-# watcher holds no bring-up logic. Guarded on WATCH_PID so recovery doesn't stack watchers,
-# and skipped when the app binary is absent (the launcher test's stub app) or opted out.
+# Auto-recovery: a detached watcher relaunches the viewer if it dies from a lost backend (VM reboot /
+# container restart / tunnel drop) and -- for on-demand containers -- stops the container on a real
+# Quit. It relaunches via `open` on THIS .app, so the recovered viewer keeps this bundle's identity.
+# Spawned BEFORE the exec below (exec replaces this process). Guarded so recovery doesn't stack watchers.
 MARKER="${XPRA_SOCK%-xpra.sock}-viewer-lost"
 WATCH_PID="${TMPDIR:-/tmp}/thunderbird-watch.$PORT.pid"
 RW_ONDEMAND=""
 RW_ONDEMAND=1
-_bin="$APP/Contents/MacOS/Porthole"
-if [ -x "$_bin" ] && [ -z "${THUNDERBIRD_NO_RECOVER:-}" ] \
+if [ -x "$_root/bin/porthole-recover-watch" ] && [ -z "${THUNDERBIRD_NO_RECOVER:-}" ] \
    && ! { [ -f "$WATCH_PID" ] && ps -p "$(cat "$WATCH_PID")" >/dev/null 2>&1; }; then
-  RW_BIN="$_bin" RW_MARKER="$MARKER" RW_RELAUNCH="$0" RW_PIDFILE="$WATCH_PID" \
+  RW_BIN="$_bin" RW_MARKER="$MARKER" RW_RELAUNCH="open \"$_appbundle\"" RW_PIDFILE="$WATCH_PID" \
   RW_ONDEMAND="$RW_ONDEMAND" RW_CONTAINER="$CONTAINER" \
   RW_STOP_PIDS="$TUNNEL_PID $MENU_TUNNEL_PID" \
   nohup "$_root/bin/porthole-recover-watch" </dev/null >/dev/null 2>&1 3>&- &
 fi
+
+echo "Linux Thunderbird viewer: launching -> $XPRA_SOCK (container stops when you Quit the viewer)"
+exec "$_bin" "$XPRA_SOCK"

@@ -17,9 +17,9 @@ case "$*" in *"inspect -f"*) echo true ;; *) : ;; esac
 exit 0
 EOF
   chmod +x "$d"/*
-  mkdir -p "$d/app/build-native-thunderbird/porthole/viewer/Porthole.app"
+  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"; chmod +x "$d/viewer"
   run env DOCKER_HOST= DOCKER_CONTEXT= PATH="$d:$PATH" \
-      THUNDERBIRD_APP="$d/app/build-native-thunderbird/porthole/viewer/Porthole.app" \
+      THUNDERBIRD_VIEWER_BIN="$d/viewer" \
       "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
   rm -rf "$d"
 }
@@ -45,11 +45,11 @@ case "$*" in *"inspect -f"*) echo true ;; *) : ;; esac
 exit 0
 EOF
   chmod +x "$d"/*
-  mkdir -p "$d/app/build-native-thunderbird/porthole/viewer/Porthole.app"
+  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"; chmod +x "$d/viewer"
   # Restricted PATH: $d (no docker-machine-ctl) + system dirs ONLY -- excludes
   # /usr/local/bin where real Container Tools lives, so the "missing" path is genuine.
   run env DOCKER_HOST= DOCKER_CONTEXT= PATH="$d:/usr/bin:/bin" \
-      THUNDERBIRD_APP="$d/app/build-native-thunderbird/porthole/viewer/Porthole.app" \
+      THUNDERBIRD_VIEWER_BIN="$d/viewer" \
       "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
   rm -rf "$d"
   [ "$status" -ne 0 ] || return 1
@@ -65,9 +65,9 @@ case "$*" in *"inspect -f"*) echo true ;; *) : ;; esac
 exit 0
 EOF
   chmod +x "$d"/*
-  mkdir -p "$d/app/build-native-thunderbird/porthole/viewer/Porthole.app"
+  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"; chmod +x "$d/viewer"
   run env DOCKER_HOST=tcp://192.0.2.1:2376 PATH="$d:$PATH" \
-      THUNDERBIRD_APP="$d/app/build-native-thunderbird/porthole/viewer/Porthole.app" \
+      THUNDERBIRD_VIEWER_BIN="$d/viewer" \
       "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
   rm -rf "$d"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
