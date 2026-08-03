@@ -20,6 +20,10 @@ _root=$(cd "$(dirname "$0")/.." && pwd)   # Contents/Resources of the materializ
 
 die() { echo "@SLUG@: $*" >&2; exit 1; }
 
+# First-launch feedback: the launcher is a windowless foreground app during container setup, so post
+# Mac notifications (best-effort -- osascript may be absent/denied). $1 = message; title is the app.
+notify() { osascript -e "display notification \"$1\" with title \"@NAME@\"" >/dev/null 2>&1 || true; }
+
 # Host prerequisites (Container Tools -> Fusion). Reuse Container Tools' own contract
 # `docker-machine-ctl status` (one word) for actionable errors instead of cryptic docker
 # failures. Bypassed on an explicit endpoint or @ENVPREFIX@_NO_PREFLIGHT=1.
@@ -78,8 +82,17 @@ fi
 # Ensure the container exists and is running (build the image on first use).
 if ! docker container inspect "$CONTAINER" >/dev/null 2>&1; then
   docker image inspect "$IMAGE" >/dev/null 2>&1 || {
+    # First run builds the Linux container (minutes). The launcher has no window yet, so surface
+    # progress as Mac notifications -- one per Dockerfile step -- else the app looks dead while it works.
     echo "@SLUG@: building $IMAGE (first run)..."
-    docker build -t "$IMAGE" "$_root/@SLUG@" || die "image build failed"
+    notify "First run: building the Linux container. This runs once and can take a few minutes…"
+    docker build -t "$IMAGE" "$_root/@SLUG@" 2>&1 | while IFS= read -r _bl; do
+      case "$_bl" in "Step "*) notify "Setting up… ${_bl%% : *}" ;; esac   # e.g. "Setting up… Step 4/7"
+      printf '%s\n' "$_bl"
+    done
+    # The pipe hides docker's exit status (POSIX sh has no PIPESTATUS); the image's existence is truth.
+    docker image inspect "$IMAGE" >/dev/null 2>&1 || die "image build failed"
+    notify "Container ready — starting @NAME@…"
   }
   docker volume create "$VOLUME" >/dev/null || die "cannot create volume $VOLUME"
   # Host-FS mounts: app-inherent (@HOST_MOUNTS@ from the manifest) + ad-hoc

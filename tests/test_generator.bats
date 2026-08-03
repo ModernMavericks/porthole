@@ -99,3 +99,15 @@
   rm -rf "$d"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
 }
+
+@test "generate-viewer sanitizes an ENVPREFIX that would start with a digit (valid shell)" {
+  cd "${BATS_TEST_DIRNAME}/.."
+  [ -x bin/generate-viewer ] || skip "generator not built yet"
+  # slug "1password" -> ENVPREFIX "1PASSWORD" -> ${1PASSWORD_*} is a shell "bad substitution" that
+  # kills the launcher at line 1. It must be guarded to a valid name (_1PASSWORD).
+  d="$(mktemp -d -t onep)"; printf 'APP=1Test\nAPT_PKGS=x\nUPDATE=float\nLIFECYCLE=ondemand\n' > "$d/1test.conf"
+  ./bin/generate-viewer "$d/1test.conf" --out "$d" >/dev/null
+  sh -n "$d/bin/1test" || { echo "launcher is not valid sh"; rm -rf "$d"; return 1; }
+  grep -q '${_1TEST_IMAGE' "$d/bin/1test" || { rm -rf "$d"; return 1; }
+  rm -rf "$d"
+}

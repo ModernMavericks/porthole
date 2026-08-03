@@ -80,8 +80,12 @@ DATADIR_PARENT=$(dirname "$DATADIR")         # e.g. /home/signal/.config
 BUNDLEID="dev.modernmavericks.porthole.$SLUG"
 CHILD="$SLUG-child.sh"
 STARTGUI="start-$SLUG-gui.sh"
-# ENVPREFIX: the launcher's env-override prefix (SIGNAL_IMAGE, etc.).
+# ENVPREFIX: the launcher's env-override prefix (SIGNAL_IMAGE, etc.). Must be a valid POSIX shell
+# variable name: a leading digit (slug "1password" -> "1PASSWORD") is illegal and makes every
+# ${1PASSWORD_*} a "bad substitution" that kills the launcher at line 1 -- so guard it with a leading
+# underscore (-> _1PASSWORD_IMAGE).
 ENVPREFIX=$(printf '%s' "$SLUG" | tr '[:lower:]-' '[:upper:]_')
+case "$ENVPREFIX" in [0-9]*) ENVPREFIX="_$ENVPREFIX" ;; esac
 # Container lifecycle: FORCED explicit decision (no silent default). ondemand = stop the
 # container when the viewer quits; stayup = keep it running (e.g. it also backs a CLI/agent).
 case "$LIFECYCLE" in
