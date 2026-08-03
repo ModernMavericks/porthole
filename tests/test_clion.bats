@@ -8,9 +8,9 @@
   grep -q "download.jetbrains.com/product" "$df" || return 1
   grep -qE 'tar -xz -C /opt/clion --strip-components=1' "$df" || return 1
   grep -qE 'ln -sf /opt/clion/bin/clion.sh /usr/local/bin/clion' "$df" || return 1
-  # no apt app package (APT_PKGS empty -> just xpra xvfb)
-  grep -qE 'apt-get install -y +xpra=6.5.2-r0-1 xvfb' "$df" || return 1
-  # the Swing/JBR X11 + font deps
+  # no apt app package (APT_PKGS empty); xpra/Xvfb are in the base now
+  ! grep -q 'apt-get install -y[^-].*xpra=' "$df" || return 1
+  # the Swing/JBR X11 + font deps (still per-app, via EXTRA_PKGS)
   grep -qE 'libxtst6' "$df" || return 1
   # no Signal/1Password/VNC baggage (non-comment lines)
   ! grep -v '^[[:space:]]*#' "$df" | grep -qiE 'signal|1password|tigervnc|openbox|helium' || return 1

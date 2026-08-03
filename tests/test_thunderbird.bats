@@ -4,7 +4,8 @@
 
 @test "Thunderbird Dockerfile installs thunderbird from the base distro (no third-party apt repo)" {
   df="${BATS_TEST_DIRNAME}/../examples/thunderbird/Dockerfile"
-  grep -qE 'apt-get install -y thunderbird xpra=6.5.2-r0-1 xvfb' "$df" || return 1
+  grep -qE 'apt-get install -y --no-install-recommends thunderbird' "$df" || return 1   # xpra/Xvfb are in the base
+  grep -q 'FROM ghcr.io/ModernMavericks/porthole-base' "$df" || return 1
   # base-distro path: no per-app apt key fetch or sources.list.d entry
   ! grep -q 'sources.list.d/thunderbird' "$df" || return 1
   ! grep -qi 'keyrings/thunderbird-desktop' "$df" || return 1
@@ -60,8 +61,10 @@ EOF
   grep -q 'porthole-recover-watch' "$b" || return 1
 }
 
-@test "thunderbird image installs a11y + bakes the menu daemon" {
-  df="${BATS_TEST_DIRNAME}/../examples/thunderbird/Dockerfile"
+@test "the shared base bakes a11y + the menu daemon (per-app recipes just enable it)" {
+  # a11y (AT-SPI) + the menu daemon are common + ours, so they live in the base image, not the per-app
+  # recipe; a per-app child.sh starts the daemon when MENU_PRODUCER is set (tested separately).
+  df="${BATS_TEST_DIRNAME}/../base/Dockerfile"
   grep -q 'python3-pyatspi' "$df" || return 1
   grep -q 'at-spi2-core' "$df" || return 1
   grep -q 'porthole-menu-daemon.py' "$df" || return 1

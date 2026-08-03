@@ -5,7 +5,7 @@
 @test "Helium Dockerfile installs helium-bin from Helium's own apt repo" {
   df="${BATS_TEST_DIRNAME}/../examples/helium/Dockerfile"
   grep -q 'pkg.helium.computer/deb' "$df" || return 1
-  grep -qE 'apt-get install -y helium-bin xpra=6.5.2-r0-1 xvfb' "$df" || return 1
+  grep -qE 'apt-get install -y --no-install-recommends helium-bin' "$df" || return 1   # xpra/Xvfb in the base
   # audio bridge on: pulseaudio pulled in
   grep -q 'pulseaudio' "$df" || return 1
   # no Signal/1Password/VNC baggage (non-comment lines only)

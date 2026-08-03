@@ -111,3 +111,12 @@
   grep -q '${_1TEST_IMAGE' "$d/bin/1test" || { rm -rf "$d"; return 1; }
   rm -rf "$d"
 }
+
+@test "the shared base image has the pinned xpra runtime and NO vendor software" {
+  cd "${BATS_TEST_DIRNAME}/.."
+  df="base/Dockerfile"
+  grep -q 'xpra=6.5.2-r0-1' "$df" || return 1     # the xpra pin lives here now (not duplicated per app)
+  grep -q 'xvfb' "$df" || return 1
+  # base is ours/OSS only -- no vendor app or vendor apt repo baked in (that's the whole point)
+  ! grep -qiE 'signal|1password|helium|thunderbird|clion|jetbrains' "$df" || return 1
+}

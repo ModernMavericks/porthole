@@ -78,6 +78,11 @@ VOLUME="$SLUG-gui-data"
 APPCONFIG="${DATADIR#/home/$USER/}"          # e.g. .config/Signal
 DATADIR_PARENT=$(dirname "$DATADIR")         # e.g. /home/signal/.config
 BUNDLEID="dev.modernmavericks.porthole.$SLUG"
+# The pre-built shared base the per-app recipe FROMs (xpra/Xvfb/runtime/menu-daemon/fonts -- no vendor
+# software). Pin to the installed Porthole version (the engine carries VERSION after packaging), else
+# :latest for a dev checkout. PORTHOLE_BASE_REF overrides entirely (e.g. a locally-built base).
+BASE_TAG=$(tr -d '[:space:]' < "$ENGINE/VERSION" 2>/dev/null || true); : "${BASE_TAG:=latest}"
+BASE_REF="${PORTHOLE_BASE_REF:-ghcr.io/ModernMavericks/porthole-base:$BASE_TAG}"
 CHILD="$SLUG-child.sh"
 STARTGUI="start-$SLUG-gui.sh"
 # ENVPREFIX: the launcher's env-override prefix (SIGNAL_IMAGE, etc.). Must be a valid POSIX shell
@@ -101,7 +106,7 @@ if [ "$LIFECYCLE" = ondemand ]; then LIFECYCLE_ONDEMAND=1; else LIFECYCLE_ONDEMA
 if [ "$EXTRA_PKGS" ]; then EXTRA_PKGS_SP=" $EXTRA_PKGS"; else EXTRA_PKGS_SP=; fi
 if [ "$USER_GROUP" ]; then USER_GROUP_ARG=" -g $USER_GROUP"; else USER_GROUP_ARG=; fi
 
-export APP NAME SLUG PORT BASE_IMAGE APT_KEY_URL APT_REPO APT_PKGS EXTRA_PKGS \
+export APP NAME SLUG PORT BASE_IMAGE BASE_REF APT_KEY_URL APT_REPO APT_PKGS EXTRA_PKGS \
   APP_BIN APP_FLAGS USER USER_GROUP DATADIR ICON_GLOB LIFECYCLE \
   AUDIO NOAUDIO PRINTING PTRACE DARK_THEME OPEN_URL FILE_TRANSFER NOTIFICATIONS \
   EXTRA_SETUP ENCODINGS HOME IMAGE CONTAINER VOLUME APPCONFIG DATADIR_PARENT \
@@ -160,9 +165,8 @@ mkdir -p "$OUTDIR" "$BINDIR"
 render "$TMPL/Dockerfile.tmpl"  "$OUTDIR/Dockerfile"     "$HEADER"
 render "$TMPL/start-gui.sh.tmpl" "$OUTDIR/$STARTGUI"     "$HEADER"
 render "$TMPL/child.sh.tmpl"    "$OUTDIR/$CHILD"         "$HEADER"
-cp "$TMPL/mac-fonts.conf"       "$OUTDIR/mac-fonts.conf"
-# The AT-SPI menu daemon is a static file COPY'd into a11y-capable images only.
-if [ "$MENU_PRODUCER" ]; then cp "$ENGINE/menu-daemon.py" "$OUTDIR/porthole-menu-daemon.py"; fi
+# The Mac-font alias and the AT-SPI menu daemon now live in the shared base image (@BASE_REF@),
+# not the per-app build context -- a per-app recipe just enables the daemon via child.sh.
 render "$TMPL/launcher.tmpl"    "$BINDIR/$SLUG"          "$HEADER"
 
 chmod 755 "$OUTDIR/$STARTGUI" "$OUTDIR/$CHILD" "$BINDIR/$SLUG"
