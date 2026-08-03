@@ -81,8 +81,10 @@ BUNDLEID="dev.modernmavericks.porthole.$SLUG"
 # The pre-built shared base the per-app recipe FROMs (xpra/Xvfb/runtime/menu-daemon/fonts -- no vendor
 # software). Pin to the installed Porthole version (the engine carries VERSION after packaging), else
 # :latest for a dev checkout. PORTHOLE_BASE_REF overrides entirely (e.g. a locally-built base).
-BASE_TAG=$(tr -d '[:space:]' < "$ENGINE/VERSION" 2>/dev/null || true); : "${BASE_TAG:=latest}"
-BASE_REF="${PORTHOLE_BASE_REF:-ghcr.io/ModernMavericks/porthole-base:$BASE_TAG}"
+BASE_TAG=latest
+[ -f "$ENGINE/VERSION" ] && BASE_TAG=$(tr -d '[:space:]' < "$ENGINE/VERSION")
+# Docker image refs MUST be lowercase (the org is ModernMavericks; the image path is not).
+BASE_REF="${PORTHOLE_BASE_REF:-ghcr.io/modernmavericks/porthole-base:$BASE_TAG}"
 CHILD="$SLUG-child.sh"
 STARTGUI="start-$SLUG-gui.sh"
 # ENVPREFIX: the launcher's env-override prefix (SIGNAL_IMAGE, etc.). Must be a valid POSIX shell

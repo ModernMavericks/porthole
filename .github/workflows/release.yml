@@ -107,6 +107,39 @@ jobs:
   # regenerates SHA256SUMS, uses RELEASE_NOTES.md from the artifact as the body (failing if missing
   # or empty), and mints the tag at this commit (a dispatch-cut tag pushed by GITHUB_TOKEN triggers
   # nothing, so the publisher must mint it inline).
+  # The shared BASE container image every viewer FROMs (xpra/Xvfb/runtime/menu-daemon/fonts -- NO
+  # vendor software). Built on Linux and pushed to GHCR so users PULL the heavy common layer (shared
+  # across all apps) instead of rebuilding it. Tagged with the release version + :latest, matching the
+  # BASE_REF generate-viewer pins. First push creates the package PRIVATE -- flip it to PUBLIC once in
+  # the org's package settings so users can pull without a GitHub login.
+  base-image:
+    needs: build
+    if: needs.build.outputs.publish == 'yes'
+    runs-on: ubuntu-latest   # Linux, for `docker build` of the amd64 image
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Assemble the base build context
+        run: |
+          set -eu
+          mkdir -p _basectx
+          cp base/Dockerfile          _basectx/Dockerfile
+          cp menu-daemon.py           _basectx/porthole-menu-daemon.py
+          cp templates/mac-fonts.conf _basectx/mac-fonts.conf
+      - name: Log in to GHCR
+        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Build + push the shared base
+        run: |
+          set -eu
+          IMG=ghcr.io/modernmavericks/porthole-base
+          VER="${{ needs.build.outputs.ver }}"
+          docker build -t "$IMG:$VER" -t "$IMG:latest" _basectx
+          docker push "$IMG:$VER"
+          docker push "$IMG:latest"
+          echo "pushed $IMG:$VER + :latest"
+
   publish:
     needs: build
     if: needs.build.outputs.publish == 'yes'

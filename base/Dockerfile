@@ -2,7 +2,7 @@
 # xpra (pinned), Xvfb, the common desktop/runtime libs, the menu daemon, and the Mac-font alias.
 # NO vendor application and NO vendor icon live here -- those install from the vendor on the user's
 # Mac (Porthole redistributes nothing vendor-owned). Built in CI, pushed to
-# ghcr.io/ModernMavericks/porthole-base:<porthole-version>; per-app recipes FROM it, so the heavy
+# ghcr.io/modernmavericks/porthole-base:<porthole-version>; per-app recipes FROM it, so the heavy
 # common layer is pulled (shared across all apps) instead of rebuilt on every user's machine.
 FROM debian:13-slim
 

@@ -46,6 +46,9 @@ install -m 0755 "$REPO/bin/porthole-recover-watch"       "$ENGDIR/bin/porthole-r
 install -m 0644 "$REPO/menu-daemon.py"                   "$ENGDIR/menu-daemon.py"
 install -m 0755 "$REPO/viewer/cmake/extract-app-icns.sh" "$ENGDIR/viewer/cmake/extract-app-icns.sh"
 cp -R "$REPO/templates/." "$ENGDIR/templates/"
+# Stamp the release version into the engine so `porthole materialize` pins the per-app recipe's
+# FROM to ghcr.io/modernmavericks/porthole-base:<this version> (a dev checkout has none -> :latest).
+printf '%s\n' "$VERSION" > "$ENGDIR/VERSION"
 
 # Convenience CLI wrapper. Deliberately a tiny exec shim, NOT a symlink: the real porthole
 # resolves its engine root from $0, and a symlink would make $0 the /usr/local/bin path.

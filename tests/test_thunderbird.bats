@@ -5,7 +5,7 @@
 @test "Thunderbird Dockerfile installs thunderbird from the base distro (no third-party apt repo)" {
   df="${BATS_TEST_DIRNAME}/../examples/thunderbird/Dockerfile"
   grep -qE 'apt-get install -y --no-install-recommends thunderbird' "$df" || return 1   # xpra/Xvfb are in the base
-  grep -q 'FROM ghcr.io/ModernMavericks/porthole-base' "$df" || return 1
+  grep -q 'FROM ghcr.io/modernmavericks/porthole-base' "$df" || return 1
   # base-distro path: no per-app apt key fetch or sources.list.d entry
   ! grep -q 'sources.list.d/thunderbird' "$df" || return 1
   ! grep -qi 'keyrings/thunderbird-desktop' "$df" || return 1
