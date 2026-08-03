@@ -50,3 +50,11 @@ teardown() {
   grep -q 'exec "$_bin" "$XPRA_SOCK"' "$B/Resources/bin/thunderbird"   # runs it IN PLACE
   ! grep -q 'open "$APP"' "$B/Resources/bin/thunderbird"              # not `open` of a shared app
 }
+
+@test "the app wears the penguin default icon (the real icon is extracted on first launch, never shipped)" {
+  "$ENGINE/bin/porthole" materialize "$ENGINE/examples/thunderbird.conf" --apps-dir "$APPS" >/dev/null
+  A="$APPS/Linux Thunderbird.app/Contents"
+  [ -f "$A/Resources/AppIcon.icns" ]
+  cmp -s "$A/Resources/AppIcon.icns" "$ENGINE/packaging/macos/penguin.icns"   # ours, redistributable
+  [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$A/Info.plist")" = AppIcon ]
+}

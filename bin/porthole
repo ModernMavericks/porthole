@@ -82,17 +82,14 @@ exec "\$(cd "\$(dirname "\$0")/../Resources/bin" && pwd)/$SLUG" "\$@"
 EOF
 chmod 755 "$BUNDLE/Contents/MacOS/$SLUG"
 
-# 3) App icon: pull from the live container here on the Mac (best-effort). A missing
-#    container / PORTHOLE_MATERIALIZE_NO_ICON leaves the bundle iconless -> system generic.
+# 3) App icon: bake the Linux PENGUIN default (ours, redistributable). The REAL app icon is not
+#    shipped by us -- the launcher extracts it from the user's own container on first launch and swaps
+#    it in. So a fresh materialize wears the penguin; after first launch it's the app's own icon.
 ICON_FILE=
-if [ "${PORTHOLE_MATERIALIZE_NO_ICON:-}" != 1 ]; then
-  if ONEP_CONTAINER="$SLUG-gui" PORTHOLE_ICON_GLOB="$ICON_GLOB" \
-       sh "$ENGINE/viewer/cmake/extract-app-icns.sh" \
-          "$BUNDLE/Contents/Resources/AppIcon.icns" >/dev/null 2>&1; then
-    ICON_FILE="AppIcon"
-  else
-    echo "porthole: no icon for $NAME (container '$SLUG-gui' not running?) -- using the generic icon" >&2
-  fi
+PENGUIN="$ENGINE/penguin.icns"; [ -f "$PENGUIN" ] || PENGUIN="$ENGINE/packaging/macos/penguin.icns"
+if [ -f "$PENGUIN" ]; then
+  install -m 0644 "$PENGUIN" "$BUNDLE/Contents/Resources/AppIcon.icns"
+  ICON_FILE="AppIcon"
 fi
 
 # 4) Info.plist.

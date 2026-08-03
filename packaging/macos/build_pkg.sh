@@ -45,6 +45,7 @@ install -m 0755 "$REPO/bin/generate-viewer"              "$ENGDIR/bin/generate-v
 install -m 0755 "$REPO/bin/porthole-recover-watch"       "$ENGDIR/bin/porthole-recover-watch"
 install -m 0644 "$REPO/menu-daemon.py"                   "$ENGDIR/menu-daemon.py"
 install -m 0755 "$REPO/viewer/cmake/extract-app-icns.sh" "$ENGDIR/viewer/cmake/extract-app-icns.sh"
+install -m 0644 "$REPO/packaging/macos/penguin.icns"     "$ENGDIR/penguin.icns"   # default app icon
 cp -R "$REPO/templates/." "$ENGDIR/templates/"
 # Stamp the release version into the engine so `porthole materialize` pins the per-app recipe's
 # FROM to ghcr.io/modernmavericks/porthole-base:<this version> (a dev checkout has none -> :latest).
