@@ -46,6 +46,7 @@ EOF
   chmod +x "$tmp"/docker "$tmp"/open "$tmp"/socat "$tmp"/docker-machine
   printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$tmp/viewer"; chmod +x "$tmp/viewer"
   run env PATH="$tmp:$PATH" THUNDERBIRD_NO_PREFLIGHT=1 \
+        PORTHOLE_BIN="${BATS_TEST_DIRNAME}/stubs/porthole" \
         THUNDERBIRD_VIEWER_BIN="$tmp/viewer" \
         "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }

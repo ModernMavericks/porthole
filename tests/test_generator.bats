@@ -6,8 +6,41 @@
   # Examples embed the base ref as :latest (version-independent illustrations). Pin it, else CI --
   # where the build step has written a dated VERSION -- would render FROM …base:<version> and diff.
   PORTHOLE_BASE_REF=ghcr.io/modernmavericks/porthole-base:latest ./bin/generate-viewer examples/thunderbird.conf >/dev/null
-  run git diff --exit-code -- examples/thunderbird/ examples/bin/thunderbird
+  run git diff --exit-code -- examples/thunderbird/ examples/bin/thunderbird examples/thunderbird.container
   [ "$status" -eq 0 ]
+}
+
+@test "generate-viewer emits a resolved container spec (name/container/image/build-context)" {
+  cd "${BATS_TEST_DIRNAME}/.."
+  [ -x bin/generate-viewer ] || skip "generator not built yet"
+  d="$(mktemp -d -t spec)"; printf 'APP=Demo\nAPT_PKGS=demo-pkg\nUPDATE=float\nLIFECYCLE=ondemand\nDATADIR=/home/demo/.config/Demo\nUSER=demo\n' > "$d/demo.conf"
+  ./bin/generate-viewer "$d/demo.conf" --out "$d" >/dev/null
+  spec="$d/demo.container"
+  [ -f "$spec" ] || { rm -rf "$d"; return 1; }
+  grep -q "CONTAINER='demo-gui'" "$spec" || { cat "$spec"; rm -rf "$d"; return 1; }
+  grep -q "IMAGE='mavericks-demo'" "$spec" || { rm -rf "$d"; return 1; }
+  grep -q "BUILD_CONTEXT='demo'" "$spec" || { rm -rf "$d"; return 1; }
+  rm -rf "$d"
+}
+
+@test "PTRACE=yes becomes CAPS SYS_PTRACE and EXTRA_VOLUMES flow into the spec" {
+  cd "${BATS_TEST_DIRNAME}/.."
+  [ -x bin/generate-viewer ] || skip "generator not built yet"
+  d="$(mktemp -d -t caps)"
+  printf 'APP=Demo\nAPT_PKGS=demo-pkg\nUPDATE=float\nLIFECYCLE=stayup\nUSER=demo\nDATADIR=/home/demo/.config/Demo\nPTRACE=yes\nEXTRA_VOLUMES=demo-cli:/root/.config/demo\n' > "$d/demo.conf"
+  ./bin/generate-viewer "$d/demo.conf" --out "$d" >/dev/null
+  spec="$d/demo.container"
+  grep -q "CAPS='SYS_PTRACE'" "$spec" || { cat "$spec"; rm -rf "$d"; return 1; }
+  grep -q "EXTRA_VOLUMES='demo-cli:/root/.config/demo'" "$spec" || { rm -rf "$d"; return 1; }
+  rm -rf "$d"
+}
+
+@test "generated launcher delegates container bring-up to porthole up (no inline docker run)" {
+  cd "${BATS_TEST_DIRNAME}/.."
+  grep -q 'porthole.*up' examples/bin/thunderbird || return 1
+  grep -q 'thunderbird.container' examples/bin/thunderbird || return 1
+  # the launcher must NOT build/run the container itself anymore -- Porthole's `up` is the creator
+  ! grep -qE 'docker run -d --name|docker build -t' examples/bin/thunderbird || return 1
 }
 
 @test "generate-viewer defaults NAME to 'Linux <APP>' and emits the slug" {

@@ -3,21 +3,130 @@
 # repo checkout). Subcommands:
 #   materialize <conf-path> [--apps-dir DIR]
 #       Render a preset conf into a standalone "Linux <App>.app" that wraps the SHARED
-#       installed Porthole viewer engine. This is the on-Mac, install-time counterpart of
-#       the build-time viewer generation: a preset ships just the <slug>.conf (the whole
-#       container recipe + launcher are rendered from templates/ by generate-viewer), and
-#       materialize packages that output into a first-class .app whose launcher points at
-#       /Applications/Porthole.app. The app icon is pulled from the live container here on
-#       the Mac (best-effort; never committed).
+#       installed Porthole viewer engine (build-time viewer generation's on-Mac,
+#       install-time counterpart). materialize also drops a resolved <slug>.container spec
+#       into the .app: the single source of truth `up`/`exec` read.
+#   up [--rebuild] <container-spec>
+#       Bring a viewer's container up (build the image on first use, create volumes, run it
+#       with the spec's caps/volumes/mounts, else start it). Headless -- no viewer. This is
+#       the ONE creator of the container; the launcher and any companion CLI route through
+#       it, so the GUI and CLI can never land on different containers.
+#   exec <container-spec> [docker-exec flags...] -- <command...>
+#       Ensure the container is up, then run <command> inside it (docker exec). The generic
+#       primitive a companion CLI (e.g. bin/op) is built on. Flags before `--` pass straight
+#       through to docker exec (-i, -it, -u U, -e K=V, ...).
 set -eu
 
 ENGINE=$(cd "$(dirname "$0")/.." && pwd)   # engine root: bin/, templates/, viewer/cmake/
 
-usage() { echo "usage: porthole materialize <conf-path> [--apps-dir DIR]" >&2; exit 2; }
+usage() {
+  cat >&2 <<'EOF'
+usage:
+  porthole materialize <conf-path> [--apps-dir DIR]
+  porthole up [--rebuild] <container-spec>
+  porthole exec <container-spec> [docker-exec flags...] -- <command...>
+EOF
+  exit 2
+}
+
+# --- up: the SINGLE container creator (headless) -----------------------------
+cmd_up() {
+  _rebuild=0
+  [ "${1:-}" = --rebuild ] && { _rebuild=1; shift; }
+  _spec="${1:-}"; [ -n "$_spec" ] || usage
+  [ -f "$_spec" ] || { echo "porthole up: no such container spec: $_spec" >&2; exit 1; }
+  _specdir=$(cd "$(dirname "$_spec")" && pwd)
+  NAME= CONTAINER= IMAGE= HOSTNAME= BUILD_CONTEXT= DATADIR= VOLUME= CAPS= EXTRA_VOLUMES= HOST_MOUNTS=
+  # shellcheck disable=SC1090
+  . "$_spec"
+  [ -n "$CONTAINER" ] && [ -n "$IMAGE" ] \
+    || { echo "porthole up: spec missing CONTAINER/IMAGE: $_spec" >&2; exit 1; }
+  _ctx="$_specdir/$BUILD_CONTEXT"
+  # First-run build feedback: the caller (a windowless launcher) has no UI, so post Mac
+  # notifications (best-effort -- osascript may be absent/denied).
+  _notify() { osascript -e "display notification \"$1\" with title \"${NAME:-Porthole}\"" >/dev/null 2>&1 || true; }
+
+  if [ "$_rebuild" = 1 ]; then
+    docker build --no-cache --pull -t "$IMAGE" "$_ctx" || { echo "porthole up: image build failed" >&2; exit 1; }
+    docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+  fi
+
+  if docker container inspect "$CONTAINER" >/dev/null 2>&1; then
+    docker container inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null | grep -q true \
+      || docker start "$CONTAINER" >/dev/null || { echo "porthole up: cannot start $CONTAINER" >&2; exit 1; }
+    return 0
+  fi
+
+  if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    echo "porthole up: building $IMAGE (first run; can take a few minutes)..." >&2
+    _notify "First run: building the Linux container. This runs once and can take a few minutes…"
+    docker build -t "$IMAGE" "$_ctx" 2>&1 | while IFS= read -r _bl; do
+      case "$_bl" in "Step "*) _notify "Setting up… ${_bl%% : *}" ;; esac   # e.g. "Setting up… Step 4/7"
+      printf '%s\n' "$_bl" >&2
+    done
+    # The pipe hides docker's exit status (POSIX sh has no PIPESTATUS); the image's existence is truth.
+    docker image inspect "$IMAGE" >/dev/null 2>&1 || { echo "porthole up: image build failed" >&2; exit 1; }
+    _notify "Container ready — starting ${NAME:-the app}…"
+  fi
+
+  docker volume create "$VOLUME" >/dev/null || { echo "porthole up: cannot create volume $VOLUME" >&2; exit 1; }
+  # Extra named volumes (spec EXTRA_VOLUMES: VOLNAME:CTRPATH) -- e.g. a companion CLI's config dir.
+  _vol_args=""
+  for _v in $EXTRA_VOLUMES; do
+    _vn=${_v%%:*}
+    docker volume create "$_vn" >/dev/null || { echo "porthole up: cannot create volume $_vn" >&2; exit 1; }
+    _vol_args="$_vol_args -v $_v"
+  done
+  # Capabilities (spec CAPS): each --cap-add'd (e.g. SYS_PTRACE for 1Password's browser peer check).
+  _cap_args=""
+  for _c in $CAPS; do _cap_args="$_cap_args --cap-add $_c"; done
+  # Host-FS mounts: app-inherent (spec HOST_MOUNTS) + ad-hoc (PORTHOLE_EXTRA_MOUNTS env, this launch).
+  # Each is MACPATH[:CONTAINERPATH][:ro]; MACPATH may use $HOME; CONTAINERPATH defaults to MACPATH.
+  _mount_args=""
+  for _m in $HOST_MOUNTS ${PORTHOLE_EXTRA_MOUNTS:-}; do
+    case "$_m" in *:ro) _ro=":ro"; _m=${_m%:ro} ;; *) _ro="" ;; esac
+    case "$_m" in *:*) _mac=${_m%%:*}; _mc=${_m#*:} ;; *) _mac="$_m"; _mc="$_m" ;; esac
+    [ -e "$_mac" ] || { echo "porthole up: skipping mount, no such path: $_mac" >&2; continue; }
+    _mount_args="$_mount_args -v $_mac:$_mc$_ro"
+  done
+  # shellcheck disable=SC2086  # word-splitting is intentional (one arg per token)
+  docker run -d --name "$CONTAINER" --hostname "${HOSTNAME:-$IMAGE}" \
+    --restart unless-stopped --init --shm-size 512m \
+    --security-opt seccomp=unconfined \
+    $_cap_args \
+    -v "$VOLUME:$DATADIR" $_mount_args $_vol_args \
+    "$IMAGE" >/dev/null || { echo "porthole up: cannot create container $CONTAINER" >&2; exit 1; }
+}
+
+# --- exec: run a command in the app's container (ensures up first) -----------
+cmd_exec() {
+  _spec="${1:-}"; [ -n "$_spec" ] || usage; shift
+  [ -f "$_spec" ] || { echo "porthole exec: no such container spec: $_spec" >&2; exit 1; }
+  _flags=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --) shift; break ;;
+      *) _flags="$_flags $1"; shift ;;
+    esac
+  done
+  [ $# -gt 0 ] || { echo "porthole exec: no command (put -- before it)" >&2; usage; }
+  CONTAINER=
+  # shellcheck disable=SC1090
+  . "$_spec"
+  [ -n "$CONTAINER" ] || { echo "porthole exec: spec missing CONTAINER: $_spec" >&2; exit 1; }
+  cmd_up "$_spec" 1>&2   # ensure it's up; keep up's chatter off the command's stdout
+  # shellcheck disable=SC2086  # $_flags passthrough to docker exec is intentional
+  exec docker exec $_flags "$CONTAINER" "$@"
+}
 
 [ $# -gt 0 ] || usage
 cmd="$1"; shift
-[ "$cmd" = materialize ] || usage
+case "$cmd" in
+  up)   cmd_up "$@"; exit $? ;;
+  exec) cmd_exec "$@" ;;      # cmd_exec's `exec` replaces this process
+  materialize) ;;             # falls through to the linear body below
+  *) usage ;;
+esac
 
 CONF_ARG="${1:-}"; [ -n "$CONF_ARG" ] || usage
 shift
@@ -57,6 +166,10 @@ rm -rf "$BUNDLE"
 install -d "$BUNDLE/Contents/MacOS" "$BUNDLE/Contents/Resources/bin"
 install -m 0755 "$STAGE/bin/$SLUG" "$BUNDLE/Contents/Resources/bin/$SLUG"
 cp -R "$STAGE/$SLUG" "$BUNDLE/Contents/Resources/$SLUG"
+# The resolved container spec (generate-viewer emitted it beside the launcher). It's the single
+# source of truth `porthole up`/`porthole exec` read; its BUILD_CONTEXT=<slug> resolves to the
+# recipe dir copied just above. Lives beside it in Resources so relative paths line up.
+install -m 0644 "$STAGE/$SLUG.container" "$BUNDLE/Contents/Resources/$SLUG.container"
 
 # A per-app menu manifest (<confdir>/<slug>.menu.json) becomes Resources/menu.json, which the engine
 # reads at launch to build the app's native menu bar. Absent -> the default App/Edit/Window only.

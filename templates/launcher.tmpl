@@ -74,49 +74,21 @@ check_xpra_compat() {
 
 eval "$(docker-machine env "$MACHINE" 2>/dev/null)" || true
 
-if [ "$REBUILD" = 1 ]; then
-  docker build --no-cache --pull -t "$IMAGE" "$_root/@SLUG@" || die "image build failed"
-  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
-fi
-
-# Ensure the container exists and is running (build the image on first use).
-if ! docker container inspect "$CONTAINER" >/dev/null 2>&1; then
-  docker image inspect "$IMAGE" >/dev/null 2>&1 || {
-    # First run builds the Linux container (minutes). The launcher has no window yet, so surface
-    # progress as Mac notifications -- one per Dockerfile step -- else the app looks dead while it works.
-    echo "@SLUG@: building $IMAGE (first run)..."
-    notify "First run: building the Linux container. This runs once and can take a few minutes…"
-    docker build -t "$IMAGE" "$_root/@SLUG@" 2>&1 | while IFS= read -r _bl; do
-      case "$_bl" in "Step "*) notify "Setting up… ${_bl%% : *}" ;; esac   # e.g. "Setting up… Step 4/7"
-      printf '%s\n' "$_bl"
-    done
-    # The pipe hides docker's exit status (POSIX sh has no PIPESTATUS); the image's existence is truth.
-    docker image inspect "$IMAGE" >/dev/null 2>&1 || die "image build failed"
-    notify "Container ready — starting @NAME@…"
-  }
-  docker volume create "$VOLUME" >/dev/null || die "cannot create volume $VOLUME"
-  # Host-FS mounts: app-inherent (@HOST_MOUNTS@ from the manifest) + ad-hoc
-  # (@ENVPREFIX@_MOUNTS env, for your own paths -- e.g. an IDE project). Each spec is
-  #   MACPATH[:CONTAINERPATH][:ro]   -- MACPATH may use $HOME (your Mac home);
-  # CONTAINERPATH defaults to MACPATH (path-matched, so paths line up with the Mac).
-  # Only /Users is shared by the VM. (Applied at create; recreate to change.)
-  MOUNT_ARGS=""
-  for _m in @HOST_MOUNTS@ ${@ENVPREFIX@_MOUNTS:-}; do
-    case "$_m" in *:ro) _ro=":ro"; _m="${_m%:ro}" ;; *) _ro="" ;; esac
-    case "$_m" in *:*) _mac="${_m%%:*}"; _ctr="${_m#*:}" ;; *) _mac="$_m"; _ctr="$_m" ;; esac
-    [ -e "$_mac" ] || { echo "@SLUG@: skipping mount, no such path: $_mac" >&2; continue; }
-    MOUNT_ARGS="$MOUNT_ARGS -v $_mac:$_ctr$_ro"
-  done
-  # shellcheck disable=SC2086  # word-splitting is intentional (one -v per mount)
-  docker run -d --name "$CONTAINER" --hostname @IMAGE@ \
-    --restart unless-stopped --init --shm-size 512m \
-    --security-opt seccomp=unconfined \
-    -v "$VOLUME:@DATADIR@" $MOUNT_ARGS \
-    "$IMAGE" >/dev/null || die "cannot create container $CONTAINER"
-else
-  docker container inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null | grep -q true \
-    || docker start "$CONTAINER" >/dev/null || die "cannot start $CONTAINER"
-fi
+# Bring the container up via Porthole's SINGLE creator. The whole container spec (name, image,
+# caps, volumes, host mounts) was resolved once at materialize into @SLUG@.container beside this
+# launcher; `porthole up` is the ONLY thing that builds/creates it -- the same code the CLI
+# (`porthole exec`) uses -- so the GUI and any companion CLI can never drift onto different
+# containers. `up` posts its own first-run build notifications. Ad-hoc user mounts
+# (@ENVPREFIX@_MOUNTS, for your own paths this launch) are passed through and appended.
+SPEC="$_root/@SLUG@.container"
+[ -f "$SPEC" ] || die "container spec missing ($SPEC) -- re-run: porthole materialize"
+PORTHOLE="${PORTHOLE_BIN:-/Applications/Porthole.app/Contents/Resources/engine/bin/porthole}"
+[ -x "$PORTHOLE" ] || PORTHOLE="$(command -v porthole 2>/dev/null || true)"
+[ -n "$PORTHOLE" ] && [ -x "$PORTHOLE" ] || die "the Porthole engine CLI is missing -- reinstall Porthole"
+_up_flag=""; [ "$REBUILD" = 1 ] && _up_flag="--rebuild"
+# shellcheck disable=SC2086  # $_up_flag is intentionally unquoted (empty -> no arg)
+PORTHOLE_EXTRA_MOUNTS="${@ENVPREFIX@_MOUNTS:-}" "$PORTHOLE" up $_up_flag "$SPEC" \
+  || die "container bring-up failed"
 
 check_container_staleness
 check_xpra_compat

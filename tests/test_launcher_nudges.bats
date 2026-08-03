@@ -37,24 +37,21 @@ EOF
   [[ "$output" != *"days old"* ]] || return 1
 }
 
-@test "launcher --rebuild forces a fresh image build" {
+@test "launcher --rebuild delegates a fresh build to porthole up --rebuild" {
+  # The launcher no longer builds the image itself -- Porthole's `up` is the single creator, so
+  # --rebuild must pass THROUGH to `porthole up --rebuild <spec>` (the porthole stub logs it).
   d="$(mktemp -d -t pln)"
   for b in socat docker-machine open; do printf '#!/bin/sh\nexit 0\n' > "$d/$b"; done
-  cat > "$d/docker" <<'EOF'
-#!/bin/sh
-echo "docker $*" >> "$LOGF"
-case "$*" in *"inspect -f"*) echo true ;; *) : ;; esac
-exit 0
-EOF
+  printf '#!/bin/sh\ncase "$*" in *"inspect -f"*) echo true ;; *) : ;; esac\nexit 0\n' > "$d/docker"
+  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"
   chmod +x "$d"/*
-  printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"; chmod +x "$d/viewer"
-  run env DOCKER_HOST=tcp://192.0.2.1:2376 LOGF="$d/log" HOME="$d/home" PATH="$d:$PATH" \
+  run env DOCKER_HOST=tcp://192.0.2.1:2376 PORTHOLE_LOG="$d/plog" HOME="$d/home" PATH="$d:$PATH" \
       THUNDERBIRD_VIEWER_BIN="$d/viewer" \
       "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird" --rebuild
-  grep -q 'build --no-cache' "$d/log" || { cat "$d/log"; rm -rf "$d"; return 1; }
-  grep -q 'rm -f thunderbird-gui' "$d/log" || { cat "$d/log"; rm -rf "$d"; return 1; }
+  st=$status
+  grep -q 'up --rebuild .*thunderbird.container' "$d/plog" || { echo plog:; cat "$d/plog" 2>/dev/null; rm -rf "$d"; return 1; }
   rm -rf "$d"
-  [ "$status" -eq 0 ] || return 1
+  [ "$st" -eq 0 ] || return 1
 }
 
 run_thunderbird_xpra() {  # $1 = `xpra --version` output; DOCKER_HOST set -> preflight bypassed

@@ -1,0 +1,4 @@
+penguin.icns is derived from "Tux" by Garrett LeSage (github.com/garrett/Tux),
+released into the public domain. No attribution is required; this note records
+provenance. Built from tux-large.png via sips + iconutil (square-padded,
+transparency preserved). Tux originates with Larry Ewing (1996).

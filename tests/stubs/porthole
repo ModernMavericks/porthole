@@ -1,0 +1,6 @@
+#!/bin/sh
+# Stub porthole engine CLI for launcher tests: logs `up`/`exec` invocations to $PORTHOLE_LOG
+# (when set) and succeeds, so a generated launcher's delegated container bring-up is a no-op the
+# test can assert on. The REAL `up` builds/creates the container; here we just record the call.
+[ -n "${PORTHOLE_LOG:-}" ] && printf 'porthole %s\n' "$*" >> "$PORTHOLE_LOG"
+exit 0
