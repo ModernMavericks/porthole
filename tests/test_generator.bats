@@ -13,7 +13,8 @@
 @test "generate-viewer defaults NAME to 'Linux <APP>' and emits the slug" {
   cd "${BATS_TEST_DIRNAME}/.."
   [ -x bin/generate-viewer ] || skip "generator not built yet"
-  out="$(./bin/generate-viewer examples/thunderbird.conf)"
+  # :latest override so running with a dated VERSION present doesn't rewrite the committed examples.
+  out="$(PORTHOLE_BASE_REF=ghcr.io/modernmavericks/porthole-base:latest ./bin/generate-viewer examples/thunderbird.conf)"
   [[ "$out" == *'-DPORTHOLE_APP_NAME="Linux Thunderbird"'* ]] || return 1
   [[ "$out" == *'-DPORTHOLE_APP_SLUG="thunderbird"'* ]] || return 1
   grep -q 'Linux Thunderbird' examples/bin/thunderbird || return 1
