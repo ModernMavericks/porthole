@@ -3,7 +3,9 @@
 @test "generate-viewer thunderbird is idempotent (no git diff)" {
   cd "${BATS_TEST_DIRNAME}/.."          # porthole/ (the engine root)
   [ -x bin/generate-viewer ] || skip "generator not built yet"
-  ./bin/generate-viewer examples/thunderbird.conf >/dev/null
+  # Examples embed the base ref as :latest (version-independent illustrations). Pin it, else CI --
+  # where the build step has written a dated VERSION -- would render FROM …base:<version> and diff.
+  PORTHOLE_BASE_REF=ghcr.io/modernmavericks/porthole-base:latest ./bin/generate-viewer examples/thunderbird.conf >/dev/null
   run git diff --exit-code -- examples/thunderbird/ examples/bin/thunderbird
   [ "$status" -eq 0 ]
 }
