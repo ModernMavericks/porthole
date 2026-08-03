@@ -74,6 +74,10 @@ else
   echo "porthole: engine binary not at $ENGINE_BIN -- the app won't launch until re-materialized with Porthole installed" >&2
 fi
 install -m 0755 "$ENGINE/bin/porthole-recover-watch" "$BUNDLE/Contents/Resources/bin/porthole-recover-watch"
+# The icon extractor, so the launcher can swap the penguin for the app's REAL icon (from the user's
+# container) on first launch. Resolves in the installed engine ($ENGINE/viewer/cmake) or a dev checkout.
+_extract="$ENGINE/viewer/cmake/extract-app-icns.sh"
+[ -f "$_extract" ] && install -m 0755 "$_extract" "$BUNDLE/Contents/Resources/bin/extract-app-icns.sh"
 
 # CFBundleExecutable stub: a double-click runs the real launcher in Resources/bin.
 cat > "$BUNDLE/Contents/MacOS/$SLUG" <<EOF

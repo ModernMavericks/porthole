@@ -158,6 +158,21 @@ if ! { [ -f "$MENU_TUNNEL_PID" ] && ps -p "$(cat "$MENU_TUNNEL_PID")" >/dev/null
   echo $! > "$MENU_TUNNEL_PID"
 fi
 
+# One-time: replace the penguin DEFAULT icon with @NAME@'s REAL icon, extracted from the container
+# (the user's OWN installed copy -- Porthole never ships a vendor icon). Runs once (marker guard),
+# best-effort. The running viewer already has the penguin; the real icon shows from the NEXT launch
+# (LaunchServices re-reads the bundle -- `touch`ed here -- so no mid-session Dock hackery needed).
+_iconmark="$CONFIG_DIR/icon-done"
+if [ ! -f "$_iconmark" ] && [ -n "@ICON_GLOB@" ] && [ -x "$_root/bin/extract-app-icns.sh" ]; then
+  if ONEP_CONTAINER="$CONTAINER" PORTHOLE_ICON_GLOB="@ICON_GLOB@" \
+       sh "$_root/bin/extract-app-icns.sh" "$_root/AppIcon.icns.new" >/dev/null 2>&1; then
+    mv -f "$_root/AppIcon.icns.new" "$_root/AppIcon.icns"
+    touch "$(cd "$_root/../.." && pwd)" 2>/dev/null || true   # nudge LaunchServices to re-read the icon
+    mkdir -p "$CONFIG_DIR" 2>/dev/null || true; : > "$_iconmark" 2>/dev/null || true
+    echo "@SLUG@: installed @NAME@'s real icon (from your container); it shows next launch" >&2
+  fi
+fi
+
 # This viewer runs its OWN copy of the Porthole engine binary, IN PLACE (exec, not `open` of a shared
 # app) -- so the running process IS this bundle: its own icon, name, and LaunchServices instance. That
 # is what lets several materialized viewers (Signal, 1Password, ...) run at once, each as itself,
