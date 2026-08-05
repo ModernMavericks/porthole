@@ -1,7 +1,7 @@
 #!/bin/sh
 # Fetch + verify (SHA512) + cross-build skalibs then s6 (static, no execline) as x86_64/min-10.9
 # Mach-O, then copy the s6-ipcserver component binaries into $1 (an output bin dir).
-# Pins match the maintainer's pkgsrc: skalibs 2.14.4.0 (5bc6d77b...), s6 2.13.2.0 (9310225247...).
+# Pins: skalibs 2.14.4.0 (5bc6d77b...), s6 2.13.2.0 (9310225247...), SHA512-verified below.
 # NOTE: needs network (GitHub) + the shared-cmake 10.9 SDK; run in CI or on a networked box.
 set -eu
 OUTDIR="${1:?usage: fetch-s6.sh <out-bin-dir>}"
@@ -33,7 +33,8 @@ fetch s6 "$S6R" "$S6S"
 cd "$WORK/s6-$S6R"
 # --enable-allstatic: statically embed libskarnet so the shipped binaries are self-contained.
 # --disable-execline: we invoke s6-ipcserver with a plain argv (docker exec ...), not an execline
-#   block, so the execline library is unnecessary (pkgsrc keeps it only for script-spawning bins).
+#   block, so the execline library is unnecessary (it is only needed for binaries that spawn
+#   execline scripts, not for s6-ipcserver).
 # The --with-sysdeps path is where skalibs installed its sysdeps; adjust if skalibs 2.14 differs.
 CC="$CC" ./configure --enable-static --disable-shared --enable-allstatic --disable-execline \
   --with-include="$STAGE/include" --with-lib="$STAGE/lib" \
