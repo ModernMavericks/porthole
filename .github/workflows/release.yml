@@ -65,11 +65,13 @@ jobs:
           cmake -S . -B _build -DPORTHOLE_BUILD_UPDATER=ON
           cmake --build _build --target Porthole
           cmake --build _build --target PortholeUpdater
+          cmake --build _build --target transport   # cross-build skalibs+s6 -> _build/engine-bin
 
       - name: Package the .pkg (Porthole.app + engine CLI + updater + LaunchAgent)
         run: |
           set -eu
           UPD_APP="$PWD/_build/PortholeUpdater.app" \
+          PORTHOLE_TRANSPORT_DIR="$PWD/_build/engine-bin" \
             sh packaging/macos/build_pkg.sh "${{ steps.ver.outputs.ver }}" \
                "dist/porthole-${{ steps.ver.outputs.ver }}.pkg" \
                "$PWD/_build/viewer/Porthole.app"

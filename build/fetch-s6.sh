@@ -1,7 +1,9 @@
 #!/bin/sh
-# Fetch + verify (SHA512) + cross-build skalibs then s6 (static, no execline) as x86_64/min-10.9
-# Mach-O, then copy the s6-ipcserver component binaries into $1 (an output bin dir).
-# Pins: skalibs 2.14.4.0 (5bc6d77b...), s6 2.13.2.0 (9310225247...), SHA512-verified below.
+# Fetch (git, by pinned commit) + cross-build skalibs then s6 (static, no execline) as
+# x86_64/min-10.9 Mach-O, then copy the s6-ipcserver component binaries into $1 (an out bin dir).
+# Pins: skalibs 2.14.4.0, s6 2.13.2.0 -- the commit is read from SKALIBS_REF/S6_REF (first field;
+# a "# vX.Y.Z" comment on the same line lets Renovate track the tag). Integrity: git guarantees the
+# checked-out tree hashes to the pinned commit, so no separate content checksum is kept.
 # NOTE: needs network (GitHub) + the shared-cmake 10.9 SDK; run in CI or on a networked box.
 set -eu
 OUTDIR="${1:?usage: fetch-s6.sh <out-bin-dir>}"
@@ -14,23 +16,27 @@ CC="clang -arch x86_64 -isysroot $SDK -mmacosx-version-min=10.9"
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/s6-build.XXXXXX"); trap 'rm -rf "$WORK"' EXIT
 STAGE="$WORK/stage"; mkdir -p "$STAGE"
 
-fetch() {  # $1=project  $2=commit  $3=sha512
-  cd "$WORK"
-  curl -fsSL -o "$1.tar.gz" "https://github.com/skarnet/$1/archive/$2.tar.gz"
-  echo "$3  $1.tar.gz" | shasum -a 512 -c - || { echo "fetch-s6: $1 SHA512 mismatch" >&2; exit 1; }
-  tar xzf "$1.tar.gz"   # -> $1-$2/
+# Fetch a single pinned commit and check it out. GitHub allows fetching a reachable commit SHA
+# directly (allowReachableSHA1InWant); git verifies the received objects hash to $2 -- that IS the
+# integrity check (an immutable commit, unlike a mutable tag), so no separate checksum is needed.
+fetch() {  # $1=project  $2=commit
+  git init -q "$WORK/$1"
+  ( cd "$WORK/$1" \
+    && git -c protocol.version=2 fetch -q --depth 1 "https://github.com/skarnet/$1.git" "$2" \
+    && git -c advice.detachedHead=false checkout -q "$2" )
 }
 
-SKR=$(tr -d '[:space:]' < "$REPO/SKALIBS_REF"); SKS=$(tr -d '[:space:]' < "$REPO/SKALIBS_SHA512")
-S6R=$(tr -d '[:space:]' < "$REPO/S6_REF");       S6S=$(tr -d '[:space:]' < "$REPO/S6_SHA512")
+# First field of the REF file is the 40-hex commit (the rest is a "# vX.Y.Z" Renovate marker).
+SKR=$(awk 'NR==1{print $1}' "$REPO/SKALIBS_REF")
+S6R=$(awk 'NR==1{print $1}' "$REPO/S6_REF")
 
-fetch skalibs "$SKR" "$SKS"
-cd "$WORK/skalibs-$SKR"
+fetch skalibs "$SKR"
+cd "$WORK/skalibs"
 CC="$CC" ./configure --disable-shared --enable-static --prefix="$STAGE"
 make -j"$(sysctl -n hw.ncpu)"; make install
 
-fetch s6 "$S6R" "$S6S"
-cd "$WORK/s6-$S6R"
+fetch s6 "$S6R"
+cd "$WORK/s6"
 # --enable-allstatic: statically embed libskarnet so the shipped binaries are self-contained.
 # --disable-execline: we invoke s6-ipcserver with a plain argv (docker exec ...), not an execline
 #   block, so the execline library is unnecessary (it is only needed for binaries that spawn

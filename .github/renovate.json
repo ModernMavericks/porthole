@@ -1,4 +1,34 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>ModernMavericks/shared-cmake"]
+  "extends": ["github>ModernMavericks/shared-cmake"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^SKALIBS_REF$/"],
+      "matchStrings": ["(?<currentDigest>[0-9a-f]{40})\\s+#\\s+(?<currentValue>v[0-9.]+)"],
+      "depNameTemplate": "skarnet/skalibs",
+      "datasourceTemplate": "github-tags",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^S6_REF$/"],
+      "matchStrings": ["(?<currentDigest>[0-9a-f]{40})\\s+#\\s+(?<currentValue>v[0-9.]+)"],
+      "depNameTemplate": "skarnet/s6",
+      "datasourceTemplate": "github-tags",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchDepNames": ["skarnet/skalibs", "skarnet/s6"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true
+    },
+    {
+      "matchDepNames": ["skarnet/skalibs", "skarnet/s6"],
+      "matchUpdateTypes": ["minor", "major"],
+      "automerge": false
+    }
+  ]
 }
