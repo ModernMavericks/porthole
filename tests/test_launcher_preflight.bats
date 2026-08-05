@@ -44,6 +44,9 @@ EOF
 case "$*" in *"inspect -f"*) echo true ;; *) : ;; esac
 exit 0
 EOF
+  # die() now calls osascript; include a no-op stub so the restricted PATH can't
+  # reach the real /usr/bin/osascript and open a blocking GUI dialog.
+  printf '#!/bin/sh\nexit 0\n' > "$d/osascript"
   chmod +x "$d"/*
   printf '#!/bin/sh\necho "viewer-exec $*"\n' > "$d/viewer"; chmod +x "$d/viewer"
   # Restricted PATH: $d (no docker-machine-ctl) + system dirs ONLY -- excludes
@@ -71,4 +74,14 @@ EOF
       "${BATS_TEST_DIRNAME}/../examples/bin/thunderbird"
   rm -rf "$d"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+}
+
+# Relies on tests/stubs/osascript (put on PATH by test_helper setup()) to log every
+# osascript invocation to $STUB_LOG without opening a real dialog.
+@test "launcher: absent VM -> pops a modal dialog naming the fix" {
+  run_launcher absent
+  [ "$status" -ne 0 ] || return 1
+  grep -q 'display dialog' "$STUB_LOG" || { echo "no dialog in: $(cat "$STUB_LOG")"; return 1; }
+  grep -q 'docker-machine-ctl setup' "$STUB_LOG" \
+    || { echo "fix text missing from dialog log: $(cat "$STUB_LOG")"; return 1; }
 }

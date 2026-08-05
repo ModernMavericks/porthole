@@ -19,7 +19,17 @@ PORTHOLE_XPRA_VERSION="${THUNDERBIRD_XPRA_VERSION:-6.5}"   # major.minor the vie
 
 _root=$(cd "$(dirname "$0")/.." && pwd)   # Contents/Resources of the materialized app
 
-die() { echo "thunderbird: $*" >&2; exit 1; }
+# Fatal error. A double-clicked .app has no visible stderr, so a silent exit is
+# indistinguishable from "nothing happened". Echo to stderr AND pop a modal Mac dialog
+# (best-effort: never let the dialog path itself abort the exit). The full error message is passed as an argv arg
+# (not string-interpolated) to avoid AppleScript quoting.
+die() {
+  echo "thunderbird: $*" >&2
+  osascript -e 'on run {m}' \
+            -e 'display dialog m buttons {"OK"} default button "OK" with title "Linux Thunderbird" with icon caution' \
+            -e 'end run' -- "$*" >/dev/null 2>&1 || true
+  exit 1
+}
 
 # First-launch feedback: the launcher is a windowless foreground app during container setup, so post
 # Mac notifications (best-effort -- osascript may be absent/denied). $1 = message; title is the app.
