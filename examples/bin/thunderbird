@@ -96,6 +96,19 @@ SPEC="$_root/thunderbird.container"
 PORTHOLE="${PORTHOLE_BIN:-/Applications/Porthole.app/Contents/Resources/engine/bin/porthole}"
 [ -x "$PORTHOLE" ] || PORTHOLE="$(command -v porthole 2>/dev/null || true)"
 [ -n "$PORTHOLE" ] && [ -x "$PORTHOLE" ] || die "the Porthole engine CLI is missing -- reinstall Porthole"
+# s6-ipcserver is Porthole's viewer transport (a UCSPI-unix superserver): it listens on a Mac Unix
+# socket and runs `docker exec … socat …` per connection, connection on stdin/stdout. It ships in
+# the engine beside the porthole CLI; prefer that, fall back to PATH (dev). Its bin dir goes on PATH
+# so the wrapper's chain-loaded components (s6-ipcserver-socketbinder, s6-ipcserverd) resolve.
+ENGINE_BIN_DIR="${PORTHOLE%/porthole}"
+IPCSERVER="$ENGINE_BIN_DIR/s6-ipcserver"
+if [ ! -x "$IPCSERVER" ]; then
+  IPCSERVER="$(command -v s6-ipcserver 2>/dev/null || true)"
+  ENGINE_BIN_DIR="${IPCSERVER%/s6-ipcserver}"
+fi
+# Guard: both IPCSERVER (invoked) and ENGINE_BIN_DIR (prepended to PATH) are non-empty past here.
+{ [ -n "$IPCSERVER" ] && [ -x "$IPCSERVER" ]; } \
+  || die "the Porthole transport (s6-ipcserver) is missing -- reinstall Porthole"
 _up_flag=""; [ "$REBUILD" = 1 ] && _up_flag="--rebuild"
 # shellcheck disable=SC2086  # $_up_flag is intentionally unquoted (empty -> no arg)
 PORTHOLE_EXTRA_MOUNTS="${THUNDERBIRD_MOUNTS:-}" "$PORTHOLE" up $_up_flag "$SPEC" \
@@ -115,14 +128,15 @@ while [ "$_i" -lt 150 ] && ! docker exec "$CONTAINER" \
   sleep 0.2; _i=$((_i + 1))
 done
 
-# Local bridge to the container's xpra Unix socket (socat over `docker exec -i`), Unix on
+# Local bridge to the container's xpra Unix socket (s6-ipcserver over `docker exec -i`), Unix on
 # BOTH ends -- no TCP port to allocate, nothing network-exposed. The container-side socat
 # runs as root and connects the app user's socket by path.
 if ! { [ -f "$TUNNEL_PID" ] && ps -p "$(cat "$TUNNEL_PID")" >/dev/null 2>&1; }; then
-  command -v socat >/dev/null 2>&1 || die "socat not found on the Mac (e.g. pkgin install socat)"
   rm -f "$XPRA_SOCK"
-  _exec="EXEC:docker exec -i $CONTAINER socat STDIO UNIX-CONNECT\\:/run/user/1000/porthole-xpra.sock"
-  socat "UNIX-LISTEN:$XPRA_SOCK,fork,reuseaddr" "$_exec" &
+  # s6-ipcserver binds $XPRA_SOCK, forks per connection, and runs the child with the connection on
+  # stdin/stdout; docker exec -i pipes that to the container's socat, which connects the app socket.
+  PATH="$ENGINE_BIN_DIR:$PATH" "$IPCSERVER" "$XPRA_SOCK" \
+    docker exec -i "$CONTAINER" socat STDIO UNIX-CONNECT:/run/user/1000/porthole-xpra.sock &
   echo $! > "$TUNNEL_PID"
 fi
 
@@ -136,8 +150,8 @@ MENU_SOCK="${TMPDIR:-/tmp}/thunderbird-menu.sock"
 MENU_TUNNEL_PID="${TMPDIR:-/tmp}/thunderbird-menu-sock.$PORT.pid"
 if ! { [ -f "$MENU_TUNNEL_PID" ] && ps -p "$(cat "$MENU_TUNNEL_PID")" >/dev/null 2>&1; }; then
   rm -f "$MENU_SOCK"
-  _mexec="EXEC:docker exec -i $CONTAINER socat STDIO UNIX-CONNECT\\:/run/user/1000/porthole-menu.sock"
-  socat "UNIX-LISTEN:$MENU_SOCK,fork,reuseaddr" "$_mexec" &
+  PATH="$ENGINE_BIN_DIR:$PATH" "$IPCSERVER" "$MENU_SOCK" \
+    docker exec -i "$CONTAINER" socat STDIO UNIX-CONNECT:/run/user/1000/porthole-menu.sock &
   echo $! > "$MENU_TUNNEL_PID"
 fi
 

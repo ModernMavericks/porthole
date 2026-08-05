@@ -1,0 +1,5 @@
+#!/bin/sh
+printf 's6-ipcserver %s\n' "$*" >> "$STUB_LOG"
+# Real s6-ipcserver blocks listening; the launcher backgrounds it. Sleep so it stays alive
+# briefly (long enough for the test to observe the log line) without hanging the suite.
+sleep 2
