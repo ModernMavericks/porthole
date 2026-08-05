@@ -110,9 +110,18 @@ fi
 { [ -n "$IPCSERVER" ] && [ -x "$IPCSERVER" ]; } \
   || die "the Porthole transport (s6-ipcserver) is missing -- reinstall Porthole"
 _up_flag=""; [ "$REBUILD" = 1 ] && _up_flag="--rebuild"
+# Capture up's stderr so a first-run build failure is actionable in the dialog (not a bare
+# "bring-up failed"). Still relay it to real stderr. POSIX: file capture, not process-sub.
+# (up posts its own Mac notifications for build progress, so GUI users still see progress.)
+_uperr="${TMPDIR:-/tmp}/clion-up.$$.err"
 # shellcheck disable=SC2086  # $_up_flag is intentionally unquoted (empty -> no arg)
-PORTHOLE_EXTRA_MOUNTS="${CLION_MOUNTS:-}" "$PORTHOLE" up $_up_flag "$SPEC" \
-  || die "container bring-up failed"
+if PORTHOLE_EXTRA_MOUNTS="${CLION_MOUNTS:-}" "$PORTHOLE" up $_up_flag "$SPEC" 2>"$_uperr"; then
+  cat "$_uperr" >&2; rm -f "$_uperr"
+else
+  cat "$_uperr" >&2
+  _tail=$(tail -n 6 "$_uperr" 2>/dev/null) || true; rm -f "$_uperr"
+  die "container bring-up failed${_tail:+ -- $_tail}"
+fi
 
 check_container_staleness
 check_xpra_compat
