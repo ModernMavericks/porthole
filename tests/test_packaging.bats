@@ -30,3 +30,21 @@ teardown() { [ -n "$WORK" ] && rm -rf "$WORK"; }
   d="$WORK/expand"; pkgutil --expand "$WORK/out.pkg" "$d"
   grep -q 'os-version min="10.9"' "$d/Distribution"
 }
+
+@test "build_pkg stages engine/bin/s6-ipcserver when transport binaries are provided" {
+  command -v pkgbuild >/dev/null 2>&1 || skip "pkgbuild not available"
+  command -v pkgutil >/dev/null 2>&1 || skip "pkgutil not available"
+  tdir="$WORK/transport"; mkdir -p "$tdir"
+  for b in s6-ipcserver s6-ipcserver-socketbinder s6-ipcserverd; do
+    printf 'fake\n' > "$tdir/$b"; chmod +x "$tdir/$b"
+  done
+  PORTHOLE_TRANSPORT_DIR="$tdir" run sh "$ENGINE/packaging/macos/build_pkg.sh" \
+      9.9.9 "$WORK/out-transport.pkg" "$FAKEAPP"
+  [ "$status" -eq 0 ] || { echo "$output"; return 1; }
+  pkgutil --payload-files "$WORK/out-transport.pkg" 2>/dev/null | grep -q 'engine/bin/s6-ipcserver' \
+    || { echo "transport not in payload: $(pkgutil --payload-files "$WORK/out-transport.pkg" 2>/dev/null)"; return 1; }
+  for _b in s6-ipcserver-socketbinder s6-ipcserverd; do
+    pkgutil --payload-files "$WORK/out-transport.pkg" 2>/dev/null | grep -q "engine/bin/$_b" \
+      || { echo "missing engine/bin/$_b in payload"; return 1; }
+  done
+}

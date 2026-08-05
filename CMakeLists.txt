@@ -87,13 +87,28 @@ if(PORTHOLE_BUILD_UPDATER)
   )
 endif()
 
+# Cross-build the skarnet viewer transport (skalibs -> s6, static, no execline) as x86_64/10.9
+# binaries staged in the build tree; build_pkg.sh installs them into the engine. Kept out of the
+# default build so `cmake --build` stays fast/hermetic; the pkg target depends on it.
+set(PORTHOLE_TRANSPORT_DIR "${CMAKE_BINARY_DIR}/engine-bin")
+set(PORTHOLE_TRANSPORT_STAMP "${PORTHOLE_TRANSPORT_DIR}/s6-ipcserver")
+add_custom_command(
+  OUTPUT "${PORTHOLE_TRANSPORT_STAMP}"
+  COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/build/fetch-s6.sh" "${PORTHOLE_TRANSPORT_DIR}"
+  DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/SKALIBS_REF" "${CMAKE_CURRENT_SOURCE_DIR}/SKALIBS_SHA512"
+          "${CMAKE_CURRENT_SOURCE_DIR}/S6_REF"       "${CMAKE_CURRENT_SOURCE_DIR}/S6_SHA512"
+          "${CMAKE_CURRENT_SOURCE_DIR}/build/fetch-s6.sh"
+  COMMENT "Cross-building s6-ipcserver transport (x86_64/10.9)")
+add_custom_target(transport DEPENDS "${PORTHOLE_TRANSPORT_STAMP}")
+
 # `cmake --build . --target pkg` builds the Porthole installer from the freshly built
 # Porthole.app (the shared viewer engine), with the engine CLI + templates staged inside it.
 add_custom_target(pkg
-  COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/packaging/macos/build_pkg.sh"
+  COMMAND ${CMAKE_COMMAND} -E env "PORTHOLE_TRANSPORT_DIR=${PORTHOLE_TRANSPORT_DIR}"
+             sh "${CMAKE_CURRENT_SOURCE_DIR}/packaging/macos/build_pkg.sh"
              "${PROJECT_VERSION}" "porthole-${PROJECT_VERSION}.pkg"
              "$<TARGET_BUNDLE_DIR:Porthole>"
-  DEPENDS Porthole
+  DEPENDS Porthole transport
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
   USES_TERMINAL
   COMMENT "Building porthole-${PROJECT_VERSION}.pkg")

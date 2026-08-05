@@ -41,6 +41,16 @@ cp -R "$APP_IN" "$ROOT/Applications/Porthole.app"
 ENGDIR="$ROOT/Applications/Porthole.app/Contents/Resources/engine"
 install -d "$ENGDIR/bin" "$ENGDIR/templates" "$ENGDIR/viewer/cmake"
 install -m 0755 "$REPO/bin/porthole"                     "$ENGDIR/bin/porthole"
+# Porthole's viewer transport (skarnet s6-ipcserver), cross-built for 10.9; the CMake `transport`
+# target passes its dir. A dev build without it still packages -- the launcher then falls back to a
+# PATH s6-ipcserver -- mirroring the ENGINE_BIN handling elsewhere.
+if [ -n "${PORTHOLE_TRANSPORT_DIR:-}" ] && [ -x "$PORTHOLE_TRANSPORT_DIR/s6-ipcserver" ]; then
+  for _b in s6-ipcserver s6-ipcserver-socketbinder s6-ipcserverd; do
+    install -m 0755 "$PORTHOLE_TRANSPORT_DIR/$_b" "$ENGDIR/bin/$_b"
+  done
+else
+  echo "build_pkg: no transport binaries (PORTHOLE_TRANSPORT_DIR unset) -- pkg relies on a PATH s6-ipcserver" >&2
+fi
 install -m 0755 "$REPO/bin/generate-viewer"              "$ENGDIR/bin/generate-viewer"
 install -m 0755 "$REPO/bin/porthole-recover-watch"       "$ENGDIR/bin/porthole-recover-watch"
 install -m 0644 "$REPO/menu-daemon.py"                   "$ENGDIR/menu-daemon.py"
