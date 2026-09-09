@@ -17,12 +17,23 @@ on:
 permissions:
   contents: write
 
-# Do not cancel a dispatch (it publishes): all dispatches share ONE group -- a version-bump lock, so
-# two cannot cut the same .N. A dispatch and an ordinary main build use different groups and never
-# cancel each other.
+# Only a pull_request supersedes -- keyed per ref, so a force-push replaces its own predecessor.
+# Everything else (a branch push, a *-mavericks.* tag, a workflow_dispatch) is keyed per RUN and is
+# therefore alone in its group: never queued, never evicted, never cancelled.
+#
+# cancel-in-progress:false was never the protection it looked like: it protects the RUNNING job and
+# not the QUEUED one -- GitHub keeps only the newest pending run per group and cancels the rest -- so
+# the old shared group discarded runs silently. golang lost one on 2026-09-09, 13 seconds after the
+# run that evicted it.
+#
+# This repo publishes only from a tag or a dispatch, but keeps the family's one shape: eight of the
+# thirteen product repos auto-cut on a push to main, and a rule that holds only in some of them is a
+# rule nobody can apply from memory.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && 'publish' || github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+  group: >-
+    release-${{ github.event_name == 'pull_request'
+                && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
