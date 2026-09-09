@@ -1,5 +1,5 @@
 # Porthole -- native Cocoa Xpra viewer. A component of the top-level
-# mavericks-1password project (which owns project(), the mavericks-shared-cmake
+# mavericks-1password project (which owns project(), the mavericks-shipyard
 # setup, and enable_testing()). Configure/build from the repo root.
 
 find_library(COCOA_LIBRARY Cocoa REQUIRED)
@@ -26,7 +26,7 @@ set(RDS_XPRA_SOURCES
 set(PORTHOLE_APP_NAME "1Password" CACHE STRING "Display name for the generated viewer app")
 set(PORTHOLE_APP_SLUG "1password" CACHE STRING "App identity slug: bundle-id suffix + per-app behavior key (never the display name)")
 
-# App icon: a FORCED explicit decision, wired below via shared-cmake's
+# App icon: a FORCED explicit decision, wired below via shipyard's
 # mavericks_require_icon (after the target exists). There is NO engine default -- a
 # product DECLARES its icon source (container + glob; the PNG is pulled from the running
 # container at configure time and never committed), or opts into a generic icon
@@ -80,7 +80,7 @@ set_target_properties(Porthole PROPERTIES
   MACOSX_BUNDLE_GUI_IDENTIFIER "dev.modernmavericks.porthole.${PORTHOLE_APP_SLUG}"
   MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Info.plist.in)
 
-# Forced icon decision (shared-cmake mavericks_require_icon). It wires the extracted
+# Forced icon decision (shipyard mavericks_require_icon). It wires the extracted
 # icns into the bundle (MACOSX_BUNDLE_ICON_FILE), or FATAL_ERRORs when the decision is
 # missing/unresolved -- never a silent default. A declared-but-unresolved icon (the
 # container was down at configure) is fatal too, unless generic is opted into.

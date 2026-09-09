@@ -10,7 +10,7 @@ version.
 | Ingredient | Pinned in | Renovate | On a change |
 |---|---|---|---|
 | Porthole itself (its own upstream) | `UPSTREAM_VERSION` (a date) | n/a — we bump the date by hand | dispatch `release.yml` → publishes `YYYYMMDD.N` |
-| MacOSX10.9 SDK + Sparkle framework | `ModernMavericks/shared-cmake@v1` (install action + `mavericks_fetch_sparkle`) | github-actions manager tracks the `@v1` tag | `@v1` is a moving tag; cut a new dated release when it matters |
+| MacOSX10.9 SDK + Sparkle framework | `ModernMavericks/shipyard@v1` (install action + `mavericks_fetch_sparkle`) | github-actions manager tracks the `@v1` tag | `@v1` is a moving tag; cut a new dated release when it matters |
 
 The `viewer/` sources, `templates/`, `bin/porthole`/`generate-viewer`, and packaging scripts are this
 repo's own recipe. The EdDSA public key (`updater/ed25519_key.pub`) is baked into the updater; the

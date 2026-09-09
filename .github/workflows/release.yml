@@ -35,8 +35,8 @@ jobs:
         with:
           fetch-depth: 0   # the .N counter reads existing <date>.* tags
 
-      - name: Install mavericks-shared-cmake
-        uses: ModernMavericks/shared-cmake/.github/actions/install@v1
+      - name: Install mavericks-shipyard
+        uses: ModernMavericks/shipyard/.github/actions/install@v1
 
       - name: Version (YYYYMMDD.N) + publish decision
         id: ver
@@ -57,7 +57,7 @@ jobs:
           echo "version=$ver publish=$pub"
 
       - name: Run the repo's tests
-        run: sh "$MSC_SCRIPTS/run-repo-tests.sh"
+        run: sh "$SHIPYARD_SCRIPTS/run-repo-tests.sh"
 
       - name: Build Porthole.app + the Sparkle updater (x86_64 / min-10.9)
         run: |
@@ -87,7 +87,7 @@ jobs:
           VER="${{ steps.ver.outputs.ver }}"
           PKG="$(ls dist/porthole-*.pkg | head -1)"
           base="https://github.com/${GITHUB_REPOSITORY}/releases/download/$VER"
-          sh "$MSC_SCRIPTS/sign_and_appcast.sh" \
+          sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" \
             --channel-title "Porthole" --version "$VER" \
             --pkg-url "$base/$(basename "$PKG")" --notes-file release-notes/README.md \
             --pkg "$PKG" --min-os 10.9 > dist/appcast.xml
@@ -147,7 +147,7 @@ jobs:
     if: needs.build.outputs.publish == 'yes'
     permissions:
       contents: write
-    uses: ModernMavericks/shared-cmake/.github/workflows/publish-release.yml@v1
+    uses: ModernMavericks/shipyard/.github/workflows/publish-release.yml@v1
     with:
       version: ${{ needs.build.outputs.ver }}
       artifact: porthole

@@ -33,10 +33,10 @@ set(PORTHOLE_APP_SLUG "porthole" CACHE STRING "App identity slug")
 # (its own follow-up; tracked in the Porthole-as-product spec).
 set(MAVERICKS_ALLOW_GENERIC_ICON ON)
 
-# Shared mavericks-* build conventions (github.com/ModernMavericks/shared-cmake): installed
+# Shared mavericks-* build conventions (github.com/ModernMavericks/shipyard): installed
 # once via `cmake --install` (self-registers in the user package registry), or the @v1 action
 # in CI. Found with no CMAKE_PREFIX_PATH.
-find_package(MavericksSharedCMake REQUIRED)
+find_package(MavericksShipyard REQUIRED)
 set(MAVERICKS_REQUIRE_LANGS OBJC)
 include(Mavericks)
 
@@ -66,7 +66,7 @@ endif()
 # --- Sparkle auto-update helper (release-time) --------------------------------------------
 # Gated OFF so the default build stays hermetic: building the updater fetches the Sparkle
 # framework over the network. The release workflow configures with -DPORTHOLE_BUILD_UPDATER=ON,
-# then stages + signs + appcasts it (shared-cmake scripts/stage_updater.sh + sign_and_appcast.sh
+# then stages + signs + appcasts it (shipyard scripts/stage_updater.sh + sign_and_appcast.sh
 # -- CI shell steps, EdDSA-secret-gated). Single native x86_64/10.9 variant (this whole project
 # targets 10.9); the Sparkle slice is auto-derived from CMAKE_OSX_ARCHITECTURES.
 option(PORTHOLE_BUILD_UPDATER "Build the Sparkle auto-update helper app (fetches Sparkle; release-time)" OFF)

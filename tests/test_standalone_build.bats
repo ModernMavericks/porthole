@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # Guard: porthole builds as its OWN top-level project. `cmake -S <root> -B <tmp>` must
 # configure with no product repo and no container -- the regression guard against
-# re-coupling this root to a parent's project()/find_package(MavericksSharedCMake).
+# re-coupling this root to a parent's project()/find_package(MavericksShipyard).
 load test_helper
 
 setup() {

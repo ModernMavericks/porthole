@@ -4,13 +4,13 @@
 # Pins: skalibs 2.14.4.0, s6 2.13.2.0 -- the commit is read from SKALIBS_REF/S6_REF (first field;
 # a "# vX.Y.Z" comment on the same line lets Renovate track the tag). Integrity: git guarantees the
 # checked-out tree hashes to the pinned commit, so no separate content checksum is kept.
-# NOTE: needs network (GitHub) + the shared-cmake 10.9 SDK; run in CI or on a networked box.
+# NOTE: needs network (GitHub) + the shipyard 10.9 SDK; run in CI or on a networked box.
 set -eu
 OUTDIR="${1:?usage: fetch-s6.sh <out-bin-dir>}"
 REPO=$(cd "$(dirname "$0")/.." && pwd)
-SH="$(cat "$HOME/.cmake/packages/MavericksSharedCMake/"* 2>/dev/null | head -1)/scripts"
+SH="$(cat "$HOME/.cmake/packages/MavericksShipyard/"* 2>/dev/null | head -1)/scripts"
 SDK="$(sh "$SH/fetch_sdk.sh" 2>/dev/null || true)"
-[ -d "$SDK" ] || { echo "fetch-s6: no 10.9 SDK from shared-cmake (SH=$SH)" >&2; exit 1; }
+[ -d "$SDK" ] || { echo "fetch-s6: no 10.9 SDK from shipyard (SH=$SH)" >&2; exit 1; }
 
 CC="clang -arch x86_64 -isysroot $SDK -mmacosx-version-min=10.9"
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/s6-build.XXXXXX"); trap 'rm -rf "$WORK"' EXIT

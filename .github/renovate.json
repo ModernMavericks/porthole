@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>ModernMavericks/shared-cmake"],
+  "extends": ["github>ModernMavericks/shipyard"],
   "customManagers": [
     {
       "customType": "regex",

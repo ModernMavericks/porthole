@@ -11,12 +11,12 @@ APP_IN="${3:-}"
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 
-# Locate the shared-cmake scripts dir (only needed when staging the Sparkle updater):
-# $MSC_SCRIPTS (CI) -> the CMake user package registry -> a sibling checkout.
+# Locate the shipyard scripts dir (only needed when staging the Sparkle updater):
+# $SHIPYARD_SCRIPTS (CI) -> the CMake user package registry -> a sibling checkout.
 resolve_msc() {
-  _m="${MSC_SCRIPTS:-}"
-  [ -d "$_m" ] || _m="$(cat "$HOME/.cmake/packages/MavericksSharedCMake/"* 2>/dev/null | head -1)/scripts"
-  [ -d "$_m" ] || _m="$REPO/../mavericks-shared-cmake/scripts"
+  _m="${SHIPYARD_SCRIPTS:-}"
+  [ -d "$_m" ] || _m="$(cat "$HOME/.cmake/packages/MavericksShipyard/"* 2>/dev/null | head -1)/scripts"
+  [ -d "$_m" ] || _m="$REPO/../mavericks-shipyard/scripts"
   [ -d "$_m" ] && printf '%s' "$_m"
 }
 
@@ -75,11 +75,11 @@ chmod 755 "$ROOT/usr/local/bin/porthole"
 SCRIPTS_ARG=""
 if [ -n "${UPD_APP:-}" ]; then
   [ -d "$UPD_APP" ] || { echo "build_pkg: UPD_APP set but no updater .app at $UPD_APP" >&2; exit 1; }
-  MSC="$(resolve_msc || true)"
-  [ -n "$MSC" ] && [ -f "$MSC/stage_updater.sh" ] \
-    || { echo "build_pkg: UPD_APP set but shared-cmake stage_updater.sh not found (set MSC_SCRIPTS)" >&2; exit 1; }
+  SHIPYARD="$(resolve_msc || true)"
+  [ -n "$SHIPYARD" ] && [ -f "$SHIPYARD/stage_updater.sh" ] \
+    || { echo "build_pkg: UPD_APP set but shipyard stage_updater.sh not found (set SHIPYARD_SCRIPTS)" >&2; exit 1; }
   SCRIPTSDIR=$(mktemp -d "${TMPDIR:-/tmp}/porthole-scripts.XXXXXX")
-  sh "$MSC/stage_updater.sh" \
+  sh "$SHIPYARD/stage_updater.sh" \
     --stage "$ROOT" \
     --app "$UPD_APP" \
     --app-dir "/Library/Application Support/ModernMavericks" \
