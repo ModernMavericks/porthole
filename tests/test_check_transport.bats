@@ -6,7 +6,8 @@
 
 setup() {
   ENGINE="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
-  WORK="$(mktemp -d "${TMPDIR:-/tmp}/check-transport-test.XXXXXX")"
+  # Normalized as the script normalizes its arg: macOS's TMPDIR ends in '/', which leaves a '//'.
+  WORK="$(cd "$(mktemp -d "${TMPDIR:-/tmp}/check-transport-test.XXXXXX")" && pwd)"
   BIN="$WORK/bin"; mkdir -p "$BIN"
   # The stand-in: `s6-ipcserver [-a perms] <sock> prog...`, one forked child per connection with
   # the connection on stdin/stdout. STUB_MODE picks how it misbehaves.
