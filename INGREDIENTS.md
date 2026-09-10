@@ -11,6 +11,8 @@ version.
 |---|---|---|---|
 | Porthole itself (its own upstream) | `UPSTREAM_VERSION` (a date) | n/a — we bump the date by hand | dispatch `release.yml` → publishes `YYYYMMDD.N` |
 | MacOSX10.9 SDK + Sparkle framework | `ModernMavericks/shipyard@v1` (install action + `mavericks_fetch_sparkle`) | github-actions manager tracks the `@v1` tag | `@v1` is a moving tag; cut a new dated release when it matters |
+| skalibs (static, into the transport) | `SKALIBS_REF` — commit + `# vA.B.C.D` tag | regex manager, grouped with s6 as `skarnet`; ship-if-green | one PR bumps both; the build cross-compiles them and `build/check-transport.sh` must pass (10.9 compat guard + the real `s6-ipcserver -a 0600` relaying a connection) |
+| s6 (`s6-ipcserver{,-socketbinder,d}` in `engine/bin`) | `S6_REF` — commit + `# vA.B.C.D` tag | same group as skalibs | as above; the transport is what every materialized app's launcher and the `op` ssh-agent bridge run |
 
 The `viewer/` sources, `templates/`, `bin/porthole`/`generate-viewer`, and packaging scripts are this
 repo's own recipe. The EdDSA public key (`updater/ed25519_key.pub`) is baked into the updater; the

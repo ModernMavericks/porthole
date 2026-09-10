@@ -4,31 +4,28 @@
   "customManagers": [
     {
       "customType": "regex",
+      "description": "skalibs, pinned by commit with its tag as a comment. skarnet versions are A.B.C.D, which semver-coerced cannot order (it offered only same-tag digest updates), so the versioning says so: a change in B is skarnet's incompatible bump and arrives as a Renovate 'minor'.",
       "managerFilePatterns": ["/^SKALIBS_REF$/"],
       "matchStrings": ["(?<currentDigest>[0-9a-f]{40})\\s+#\\s+(?<currentValue>v[0-9.]+)"],
       "depNameTemplate": "skarnet/skalibs",
       "datasourceTemplate": "github-tags",
-      "extractVersionTemplate": "^v(?<version>.+)$"
+      "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\.(?<build>\\d+)$"
     },
     {
       "customType": "regex",
+      "description": "s6, pinned the same way as skalibs.",
       "managerFilePatterns": ["/^S6_REF$/"],
       "matchStrings": ["(?<currentDigest>[0-9a-f]{40})\\s+#\\s+(?<currentValue>v[0-9.]+)"],
       "depNameTemplate": "skarnet/s6",
       "datasourceTemplate": "github-tags",
-      "extractVersionTemplate": "^v(?<version>.+)$"
+      "versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\.(?<build>\\d+)$"
     }
   ],
   "packageRules": [
     {
+      "description": "skalibs and s6 move in ONE PR: each s6 release is built against its own skalibs (s6 2.15 is an 'adaptation to skalibs-2.15'), so either bump alone fails to build and neither could ever land. Not an automerge exception -- automerge is the family default (ship-if-green) and still applies; build/check-transport.sh is what makes green mean 'the shipped s6-ipcserver works', not merely 'it compiled'.",
       "matchDepNames": ["skarnet/skalibs", "skarnet/s6"],
-      "matchUpdateTypes": ["patch"],
-      "automerge": true
-    },
-    {
-      "matchDepNames": ["skarnet/skalibs", "skarnet/s6"],
-      "matchUpdateTypes": ["minor", "major"],
-      "automerge": false
+      "groupName": "skarnet"
     }
   ]
 }
