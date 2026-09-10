@@ -1,6 +1,11 @@
 #!/usr/bin/env bats
 # Viewer #5, generated. The contrast case: a JetBrains IDE (Swing/JBR, NOT Electron)
 # installed from a TARBALL (not apt) -- exercises the generator's non-apt install path.
+# `load test_helper` is load-bearing, not boilerplate: it puts tests/stubs on PATH and pins
+# PORTHOLE_BIN at the stub engine. Without it this file found the REAL porthole (or, on a
+# runner, none at all), the launcher called die(), and die()'s modal dialog waited forever for
+# a click nobody could give -- six hours per CI run from 2026-08-04 until it was traced.
+load test_helper
 
 @test "CLion Dockerfile installs from a tarball (not apt) and pulls the Swing/X11 deps" {
   df="${BATS_TEST_DIRNAME}/../examples/clion/Dockerfile"

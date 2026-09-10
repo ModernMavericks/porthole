@@ -25,9 +25,17 @@ _root=$(cd "$(dirname "$0")/.." && pwd)   # Contents/Resources of the materializ
 # (not string-interpolated) to avoid AppleScript quoting.
 die() {
   echo "thunderbird: $*" >&2
+  # Show the error, but NEVER wait on it. `display dialog` is MODAL: it blocks until a human clicks
+  # OK, so anywhere there is no human -- CI, a test harness, ssh, Automation permission denied -- a
+  # FAILING launcher silently became a HUNG one. porthole's own CI sat on this dialog for the full
+  # six-hour job limit, three runs per push, from 2026-08-04 until it was traced to this line.
+  #
+  # Backgrounded, so exiting does not wait for it. `3>&-` because a bats `run` waits for fd 3 to
+  # close and an inheriting child would hang the suite even with the dialog gone. `</dev/null` so it
+  # can never claim the terminal. `giving up after` so a dialog nobody dismisses cannot linger.
   osascript -e 'on run {m}' \
-            -e 'display dialog m buttons {"OK"} default button "OK" with title "Linux Thunderbird" with icon caution' \
-            -e 'end run' -- "$*" >/dev/null 2>&1 || true
+            -e 'display dialog m buttons {"OK"} default button "OK" with title "Linux Thunderbird" with icon caution giving up after 120' \
+            -e 'end run' -- "$*" >/dev/null 2>&1 3>&- </dev/null &
   exit 1
 }
 

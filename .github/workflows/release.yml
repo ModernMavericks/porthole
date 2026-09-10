@@ -38,6 +38,11 @@ concurrency:
 jobs:
   build:
     runs-on: macos-26   # Apple Silicon (arm64), cross-targets 10.9; use macos-15 if 26 is unavailable
+    # A hang must cost minutes, not the 6-hour default. From 2026-08-04 to 2026-09-09 every run here
+    # blocked on the launcher's modal die() dialog and was killed at the 360-minute limit -- three
+    # runs per push, ~18 runner-hours, producing nothing and reporting only "cancelled". The dialog
+    # is fixed; this is the backstop that makes the NEXT hang cheap and legible instead of silent.
+    timeout-minutes: 45
     outputs:
       ver: ${{ steps.ver.outputs.ver }}
       publish: ${{ steps.ver.outputs.publish }}
