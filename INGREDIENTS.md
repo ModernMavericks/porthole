@@ -17,3 +17,8 @@ version.
 The `viewer/` sources, `templates/`, `bin/porthole`/`generate-viewer`, and packaging scripts are this
 repo's own recipe. The EdDSA public key (`updater/ed25519_key.pub`) is baked into the updater; the
 private half is the `SPARKLE_PRIVATE_KEY` CI secret.
+
+## Upstream release notes
+
+No upstream release notes: porthole is its own upstream -- original ModernMavericks code, versioned
+`YYYYMMDD.N` with no `-mavericks` axis -- so there are no someone-else's notes for a release to link.
