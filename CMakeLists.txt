@@ -97,6 +97,7 @@ add_custom_command(
   COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/build/fetch-s6.sh" "${PORTHOLE_TRANSPORT_DIR}"
   DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/SKALIBS_REF" "${CMAKE_CURRENT_SOURCE_DIR}/S6_REF"
           "${CMAKE_CURRENT_SOURCE_DIR}/build/fetch-s6.sh"
+          "${CMAKE_CURRENT_SOURCE_DIR}/build/check-transport.sh"
   COMMENT "Cross-building s6-ipcserver transport (x86_64/10.9)")
 add_custom_target(transport DEPENDS "${PORTHOLE_TRANSPORT_STAMP}")
 

@@ -75,6 +75,15 @@ jobs:
       - name: Run the repo's tests
         run: sh "$SHIPYARD_SCRIPTS/run-repo-tests.sh"
 
+      # The transport build RUNS what it built (build/check-transport.sh): that is what lets a
+      # skalibs/s6 bump ride the green build. Its binaries are x86_64 and this runner is arm64.
+      - name: Ensure this runner can run x86_64 (Rosetta)
+        run: |
+          set -eu
+          arch -x86_64 /usr/bin/true 2>/dev/null \
+            || sudo softwareupdate --install-rosetta --agree-to-license
+          arch -x86_64 /usr/bin/true
+
       - name: Build Porthole.app + the Sparkle updater (x86_64 / min-10.9)
         run: |
           set -eu

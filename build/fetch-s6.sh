@@ -1,9 +1,9 @@
 #!/bin/sh
 # Fetch (git, by pinned commit) + cross-build skalibs then s6 (static, no execline) as
-# x86_64/min-10.9 Mach-O, then copy the s6-ipcserver component binaries into $1 (an out bin dir).
-# Pins: skalibs 2.14.4.0, s6 2.13.2.0 -- the commit is read from SKALIBS_REF/S6_REF (first field;
-# a "# vX.Y.Z" comment on the same line lets Renovate track the tag). Integrity: git guarantees the
-# checked-out tree hashes to the pinned commit, so no separate content checksum is kept.
+# x86_64/min-10.9 Mach-O, prove them with check-transport.sh, then copy the s6-ipcserver component
+# binaries into $1 (an out bin dir). Pins: the commit is read from SKALIBS_REF/S6_REF (first field;
+# the "# vA.B.C.D" comment on the same line is the tag Renovate tracks). Integrity: git guarantees
+# the checked-out tree hashes to the pinned commit, so no separate content checksum is kept.
 # NOTE: needs network (GitHub) + the shipyard 10.9 SDK; run in CI or on a networked box.
 set -eu
 OUTDIR="${1:?usage: fetch-s6.sh <out-bin-dir>}"
@@ -47,9 +47,14 @@ CC="$CC" ./configure --enable-static --disable-shared --enable-allstatic --disab
   --with-sysdeps="$STAGE/lib/skalibs/sysdeps" --prefix="$STAGE"
 make -j"$(sysctl -n hw.ncpu)"; make install
 
-mkdir -p "$OUTDIR"
+# Prove them (10.9 compat guard + a real run) BEFORE staging: a failed check must leave nothing in
+# $OUTDIR, or the build would treat the stamp (s6-ipcserver) as done and never retry.
+CAND="$WORK/out"; mkdir -p "$CAND"
 for b in s6-ipcserver-socketbinder s6-ipcserverd s6-ipcserver; do
-  cp "$STAGE/bin/$b" "$OUTDIR/$b"; chmod 0755 "$OUTDIR/$b"
-  file "$OUTDIR/$b" | grep -q x86_64 || { echo "fetch-s6: $b not x86_64" >&2; exit 1; }
+  cp "$STAGE/bin/$b" "$CAND/$b"; chmod 0755 "$CAND/$b"
 done
+sh "$REPO/build/check-transport.sh" "$CAND"
+mkdir -p "$OUTDIR"
+# s6-ipcserver last: it is the build's stamp, so it appears only once its siblings are in place.
+for b in s6-ipcserver-socketbinder s6-ipcserverd s6-ipcserver; do cp -p "$CAND/$b" "$OUTDIR/$b"; done
 echo "fetch-s6: staged s6-ipcserver into $OUTDIR"
