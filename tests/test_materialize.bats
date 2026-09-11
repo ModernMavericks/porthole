@@ -48,7 +48,7 @@ teardown() {
   [ -x "$B/MacOS/Porthole" ]                                 # its own copy of the viewer engine binary
   [ -x "$B/Resources/bin/porthole-recover-watch" ]          # the recovery watcher, bundled
   grep -q 'exec "$_bin" "$XPRA_SOCK"' "$B/Resources/bin/thunderbird"   # runs it IN PLACE
-  ! grep -q 'open "$APP"' "$B/Resources/bin/thunderbird"              # not `open` of a shared app
+  ! grep -q 'open "$APP"' "$B/Resources/bin/thunderbird" || false     # not `open` of a shared app
 }
 
 @test "the app wears the penguin default icon (the real icon is extracted on first launch, never shipped)" {
