@@ -108,7 +108,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}   # sign_and_appcast.sh fetches ed25519-sign via `gh`
         run: |
           set -eu
-          [ -n "$SPARKLE_PRIVATE_KEY" ] || { echo "::error::SPARKLE_PRIVATE_KEY secret not set"; exit 1; }
+          # printenv, not [ -n "$SPARKLE_PRIVATE_KEY" ]: the shell never expands the key, so no trace can print it
+          printenv SPARKLE_PRIVATE_KEY | grep -q . || { echo "::error::SPARKLE_PRIVATE_KEY secret not set"; exit 1; }
           VER="${{ steps.ver.outputs.ver }}"
           PKG="$(ls dist/porthole-*.pkg | head -1)"
           base="https://github.com/${GITHUB_REPOSITORY}/releases/download/$VER"
@@ -167,8 +168,23 @@ jobs:
           docker push "$IMG:latest"
           echo "pushed $IMG:$VER + :latest"
 
+  # Before anything is published: no log of this run, and no file about to be released, carries a
+  # piece of the signing key. shipyard's publish-release.yml looks for this job's record on any signed
+  # release; it cannot run the scan itself (reading job logs needs actions: read).
+  scan:
+    needs: [build]
+    if: needs.build.outputs.publish == 'yes'
+    permissions:
+      actions: read     # this run's job logs
+      contents: read
+    uses: ModernMavericks/shipyard/.github/workflows/scan-for-key.yml@v1
+    with:
+      artifact: porthole
+    secrets:
+      SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+
   publish:
-    needs: build
+    needs: [build, scan]
     if: needs.build.outputs.publish == 'yes'
     permissions:
       contents: write
