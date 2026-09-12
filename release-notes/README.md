@@ -1,14 +1,14 @@
-## Porthole
+# Release notes
 
-A "Fluid for Linux apps": install `Porthole.app` once, then install per-app presets that materialize
-standalone "Linux <App>.app" viewers on your Mac. This file is the fallback release body.
+The generator (`release-notes.sh`, from mavericks-shipyard) writes the notes file for every
+release: the title, a "What changed" section, a "Build ingredients" section when a pin moved,
+and the footer. That file becomes both the Sparkle appcast `<description>` and the GitHub
+Release body -- the same bytes, read twice.
 
-## Setup reliability
+A file here, named `<full-version>.md` (e.g. `20260802.6.md`), is OPTIONAL hand-written
+prose for that one release. When present, it is inserted verbatim right after the generated
+title. It must NOT start with its own `## ` heading -- the generator already emits the title;
+a second one would double it.
 
-- Porthole app launchers now show a **modal dialog** when a prerequisite is missing (Docker VM
-  not set up/started, VMware Fusion absent, engine/transport/viewer missing) instead of exiting
-  silently — the dialog names the exact command to run.
-- The Mac-side viewer transport (`s6-ipcserver`) now ships inside Porthole; there is no separate
-  `socat` install step on the Mac.
-- **Already-installed apps:** re-run each app's installer (Signal, 1Password, …) once to
-  re-materialize them onto the new launcher and pick up these fixes.
+Most releases have no file here at all, and that's fine: the generator's own sections are the
+whole note.

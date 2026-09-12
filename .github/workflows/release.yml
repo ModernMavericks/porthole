@@ -101,6 +101,19 @@ jobs:
                "dist/porthole-${{ steps.ver.outputs.ver }}.pkg" \
                "$PWD/_build/viewer/Porthole.app"
 
+      # Generate the single notes file ONCE, before it has two consumers: the appcast's <description>
+      # (next step) and the release body, which travels IN the artifact because publish-release.yml
+      # does not check out the repo (dist/RELEASE_NOTES.md is uploaded below with the rest of dist/*).
+      # Same bytes, same file, read twice -- so the Release page and Sparkle tell one story.
+      - name: Generate release notes
+        if: steps.ver.outputs.publish == 'yes'
+        run: |
+          set -eu
+          VER="${{ steps.ver.outputs.ver }}"
+          sh "$SHIPYARD_SCRIPTS/release-notes.sh" \
+            --tag "$VER" --version "$VER" \
+            --product Porthole --min-os 10.9 --out dist/RELEASE_NOTES.md
+
       - name: EdDSA-sign the .pkg + generate the Sparkle appcast
         if: steps.ver.outputs.publish == 'yes'
         env:
@@ -115,16 +128,9 @@ jobs:
           base="https://github.com/${GITHUB_REPOSITORY}/releases/download/$VER"
           sh "$SHIPYARD_SCRIPTS/sign_and_appcast.sh" \
             --channel-title "Porthole" --version "$VER" \
-            --pkg-url "$base/$(basename "$PKG")" --notes-file release-notes/README.md \
+            --pkg-url "$base/$(basename "$PKG")" --notes-file dist/RELEASE_NOTES.md \
             --pkg "$PKG" --min-os 10.9 > dist/appcast.xml
           echo "=== appcast.xml ==="; cat dist/appcast.xml
-
-      - name: Collect the release-notes body into the artifact
-        run: |
-          set -eu
-          # The body travels IN the artifact: publish-release.yml does not check out the repo.
-          if [ -s release-notes/README.md ]; then cp release-notes/README.md dist/RELEASE_NOTES.md
-          else printf '## Porthole %s\n\nAutomated release.\n' "${{ steps.ver.outputs.ver }}" > dist/RELEASE_NOTES.md; fi
 
       - uses: actions/upload-artifact@v7
         with:
