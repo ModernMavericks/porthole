@@ -87,7 +87,7 @@ check_xpra_compat() {
   case $_ver in [0-9]*.[0-9]*) ;; *) return 0 ;; esac
   _mm=$(printf '%s' "$_ver" | cut -d. -f1,2)
   [ "$_mm" = "$PORTHOLE_XPRA_VERSION" ] && return 0
-  nudge_once xpra-compat "this container's xpra ($_mm) differs from what the viewer expects ($PORTHOLE_XPRA_VERSION); rebuild recommended: $0 --rebuild"
+  nudge_once xpra-compat "this container's xpra ($_mm) differs from what the viewer expects ($PORTHOLE_XPRA_VERSION); try $0 --rebuild -- if it still differs, the shared base image has moved ahead of this Porthole and Porthole wants updating"
 }
 
 eval "$(docker-machine env "$MACHINE" 2>/dev/null)" || true

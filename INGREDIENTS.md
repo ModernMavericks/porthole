@@ -14,7 +14,7 @@ version.
 | skalibs (static, into the transport) | `SKALIBS_REF` — commit + `# vA.B.C.D` tag | regex manager, grouped with s6 as `skarnet`; ship-if-green | one PR bumps both; the build cross-compiles them and `build/check-transport.sh` must pass (10.9 compat guard + the real `s6-ipcserver -a 0600` relaying a connection) |
 | s6 (`s6-ipcserver{,-socketbinder,d}` in `engine/bin`) | `S6_REF` — commit + `# vA.B.C.D` tag | same group as skalibs | as above; the transport is what every materialized app's launcher and the `op` ssh-agent bridge run |
 | Debian base of the shared container image | `base/Dockerfile` — `FROM debian:<N>-slim@sha256:…` | built-in dockerfile manager (digest **and** the numeric tag, so the next Debian major is proposed, not only a digest refresh); ship-if-green | `base-image.yml` rebuilds the image on the PR; merging it means the next release's base is built on that Debian |
-| xpra (the display server the native viewer speaks to) | `XPRA_VERSION` — one bare deb version, e.g. `6.5.2-r0-1` | regex manager on the **deb** datasource against xpra.org's own trixie index; **automerge off** (see below) | `base-image.yml` builds + asserts the image really carries that xpra; merge it together with a viewer change |
+| xpra (the display server the native viewer speaks to) | `XPRA_VERSION` — one bare deb version, e.g. `6.5.2-r0-1` | regex manager on the **deb** datasource against xpra.org's own trixie index; ship-if-green like everything else | `base-image.yml` builds + asserts the image really carries that xpra; a protocol regression is fixed forward in the next dated release |
 
 The `viewer/` sources, `templates/`, `bin/porthole`/`generate-viewer`, and packaging scripts are this
 repo's own recipe. The EdDSA public key (`updater/ed25519_key.pub`) is baked into the updater; the
@@ -39,8 +39,23 @@ leaves `xpra-common`/`-client`/`-server`/`-codecs` to apt's candidate, so when x
 and the release-time base-image job died in "held broken packages". The repo retains old versions;
 that is not the same as pinning them.
 
-**xpra is the family's one ship-if-green exception here**, and `renovate.json` says why: the native
-viewer is written against a specific xpra wire protocol, so a newer xpra installs cleanly and
-silently changes it. A green build cannot catch that — `check_xpra_compat` in the launcher only
-*nudges* the user to rebuild. Renovate still opens the PR, which is the point: nothing was watching
-xpra at all before, which is how the pin rotted unseen.
+**xpra ships-if-green, like every other bump in the org.** It was briefly an automerge exception,
+on the theory that a newer xpra builds fine and silently changes the wire protocol the hand-rolled
+Cocoa client is written against. That risk is real — xpra 5→6 renamed the hello capability `sound` →
+`audio`, and the server then *silently ignored* our audio request until the client advertised the new
+key (`viewer/src/PortholeClient.m`) — but it is the ordinary org trade: build it on the PR, fix
+forward in a dated release. The one contrary data point we have is mild: a live container drifted
+6.5.1 → 6.5.2 and kept working, which is a patch step inside the same minor and not evidence about
+6.5 → 6.6.
+
+**What makes fixing forward possible is the runtime canary, so keep the two versions apart.** The
+launcher's `check_xpra_compat` compares a container's running xpra against what the **viewer speaks**
+— `PortholeClient.m`'s advertised hello version, read by `build/xpra-client-version.sh` and stamped
+into the engine as `XPRA_CLIENT_VERSION` at package time. It is deliberately **not** derived from
+`XPRA_VERSION`: if it were, an xpra bump would move the container and the expectation together, the
+check would agree with itself, and a protocol break would surface only as "the app doesn't work".
+`tests/xpra_pin_test.sh` asserts the two stay independent.
+
+The client currently advertises `6.5.1` while the image pins `6.5.2`. That is known and left alone:
+it demonstrably works, and changing what the client claims to be is a live handshake change with no
+test to catch a regression.

@@ -91,16 +91,29 @@ BASE_TAG=latest
 BASE_REF="${PORTHOLE_BASE_REF:-ghcr.io/modernmavericks/porthole-base:$BASE_TAG}"
 CHILD="$SLUG-child.sh"
 STARTGUI="start-$SLUG-gui.sh"
-# The xpra major.minor the native viewer speaks, DERIVED from the engine's ONE xpra pin
-# (XPRA_VERSION, e.g. 6.5.2-r0-1 -> 6.5); the launcher's compat nudge compares a container's actual
-# xpra against it. Carrying the literal here too is a second thing to bump, and the stale copy wins
-# silently -- so read the pin, and fail rather than nudge against a guess.
-XPRA_PIN="$ENGINE/XPRA_VERSION"
-[ -f "$XPRA_PIN" ] || { echo "generate-viewer: no $XPRA_PIN (the base image's xpra pin)" >&2; exit 1; }
-XPRA_MM=$(tr -d '[:space:]' < "$XPRA_PIN" | cut -d. -f1,2)
+# The xpra major.minor the launcher's compat nudge expects. This is what the VIEWER SPEAKS -- the
+# version its hello advertises (build/xpra-client-version.sh reads it from PortholeClient.m) -- and
+# deliberately NOT the base image's XPRA_VERSION pin.
+#
+# They are two different facts that happen to coincide today, and deriving this one from the pin
+# would make them move together: after an xpra bump the container and the viewer's expectation would
+# agree with each other, check_xpra_compat would never fire, and a protocol break (xpra 5->6 renamed
+# the hello capability "sound" -> "audio" and the server then silently ignored our audio request)
+# would surface only as "the app doesn't work". xpra ships-if-green like everything else in the org;
+# this nudge is the runtime canary that makes fixing forward possible.
+#
+# Packaged engine: stamped at package time (the viewer's sources do not ship). Dev checkout: read them.
+if [ -f "$ENGINE/XPRA_CLIENT_VERSION" ]; then
+  XPRA_MM=$(tr -d '[:space:]' < "$ENGINE/XPRA_CLIENT_VERSION" | cut -d. -f1,2)
+elif [ -x "$ENGINE/build/xpra-client-version.sh" ]; then
+  XPRA_MM=$(sh "$ENGINE/build/xpra-client-version.sh" | cut -d. -f1,2)
+else
+  echo "generate-viewer: no XPRA_CLIENT_VERSION and no viewer sources (cannot tell what xpra the viewer speaks)" >&2
+  exit 1
+fi
 case "$XPRA_MM" in
   [0-9]*.[0-9]*) ;;
-  *) echo "generate-viewer: bad xpra pin in $XPRA_PIN (no major.minor)" >&2; exit 1 ;;
+  *) echo "generate-viewer: bad xpra client version '$XPRA_MM' (no major.minor)" >&2; exit 1 ;;
 esac
 # ENVPREFIX: the launcher's env-override prefix (SIGNAL_IMAGE, etc.). Must be a valid POSIX shell
 # variable name: a leading digit (slug "1password" -> "1PASSWORD") is illegal and makes every

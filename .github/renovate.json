@@ -32,7 +32,7 @@
     },
     {
       "customType": "regex",
-      "description": "xpra -- the display server the native Porthole viewer speaks to -- installed into the shared base image from xpra.org (it is not in Debian). This file is the ONE place the version lives: base/Dockerfile takes it as a build arg and pins the whole xpra package SET with it, and generate-viewer derives the launcher's compat major.minor from it. The deb datasource reads xpra.org's own trixie Packages index.",
+      "description": "xpra -- the display server the native Porthole viewer speaks to -- installed into the shared base image from xpra.org (it is not in Debian). XPRA_VERSION is the ONE place the image's version lives: base/Dockerfile takes it as a build arg and pins the whole xpra package SET with it. Ships-if-green like every other bump in the org: base-image.yml builds the image on the PR, and a protocol regression is fixed forward in the next dated release. The runtime canary is the launcher's check_xpra_compat, which compares a container's xpra against what the VIEWER speaks (PortholeClient.m's hello, deliberately NOT this pin) and nudges a rebuild when they diverge.",
       "managerFilePatterns": [
         "/^XPRA_VERSION$/"
       ],
@@ -53,13 +53,6 @@
         "skarnet/s6"
       ],
       "groupName": "skarnet"
-    },
-    {
-      "description": "xpra is the family's ship-if-green exception, because a bad bump BUILDS FINE AND IS WRONG: the native viewer is written against a specific xpra wire protocol, and a newer xpra installs cleanly while silently changing it. No green build can catch that -- the launcher's check_xpra_compat only nudges the user to rebuild, it does not fail. So bump xpra deliberately, together with the viewer. Renovate still opens the PR, which is the point: before this, nothing was watching xpra at all and the pin rotted until a release-time build went red.",
-      "matchDepNames": [
-        "xpra"
-      ],
-      "automerge": false
     }
   ]
 }

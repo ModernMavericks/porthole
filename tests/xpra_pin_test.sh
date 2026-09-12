@@ -60,9 +60,21 @@ fi
 grep -q '@XPRA_MM@' "$ROOT/templates/launcher.tmpl" \
   || fail "templates/launcher.tmpl: expected @XPRA_MM@ (rendered from XPRA_VERSION)"
 
-# The packaged engine must carry the pin: generate-viewer runs on the user's Mac at materialize time
-# and reads it from there. Without it, a materialized launcher nudges against nothing.
-grep -q 'XPRA_VERSION' "$ROOT/packaging/macos/build_pkg.sh" \
-  || fail "packaging/macos/build_pkg.sh: does not stage XPRA_VERSION into the engine"
+# The launcher's compat expectation must come from what the VIEWER SPEAKS, not from the image pin.
+# This is the canary, and it only works while the two can diverge: if XPRA_MM were derived from
+# XPRA_VERSION, an xpra bump would move the container AND the expectation together, check_xpra_compat
+# would agree with itself, and a protocol break would show up only as "the app doesn't work". xpra
+# ships-if-green (see tests/renovate_test.sh), so this nudge is what makes fixing forward possible.
+sh "$ROOT/build/xpra-client-version.sh" >/dev/null \
+  || fail "build/xpra-client-version.sh cannot read the viewer's advertised xpra version"
+if grep -n 'XPRA_MM' "$ROOT/bin/generate-viewer" | grep -q 'XPRA_VERSION'; then
+  fail "bin/generate-viewer: XPRA_MM is derived from the image pin; it must come from the viewer's hello"
+fi
+grep -q 'xpra-client-version.sh' "$ROOT/bin/generate-viewer" \
+  || fail "bin/generate-viewer: does not derive XPRA_MM from the viewer's advertised version"
+# The packaged engine must carry it: the viewer's sources do not ship, and generate-viewer runs on
+# the user's Mac at materialize time. Without the stamp, a materialized launcher nudges against nothing.
+grep -q 'XPRA_CLIENT_VERSION' "$ROOT/packaging/macos/build_pkg.sh" \
+  || fail "packaging/macos/build_pkg.sh: does not stage XPRA_CLIENT_VERSION into the engine"
 
 echo "xpra_pin_test: OK"
