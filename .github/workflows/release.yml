@@ -140,6 +140,10 @@ jobs:
   # across all apps) instead of rebuilding it. Tagged with the release version + :latest, matching the
   # BASE_REF generate-viewer pins. First push creates the package PRIVATE -- flip it to PUBLIC once in
   # the org's package settings so users can pull without a GitHub login.
+  #
+  # This job is the ONLY writer to GHCR, and it runs only on a publishing run -- which is why
+  # base-image.yml exists to BUILD the same image (via the same script, no push) on every PR that can
+  # change it. Without that, a rotted pin stays invisible until a release dispatch goes red.
   base-image:
     needs: build
     if: needs.build.outputs.publish == 'yes'
@@ -149,13 +153,6 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v7
-      - name: Assemble the base build context
-        run: |
-          set -eu
-          mkdir -p _basectx
-          cp base/Dockerfile          _basectx/Dockerfile
-          cp menu-daemon.py           _basectx/porthole-menu-daemon.py
-          cp templates/mac-fonts.conf _basectx/mac-fonts.conf
       - name: Log in to GHCR
         run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
       - name: Build + push the shared base
@@ -163,7 +160,9 @@ jobs:
           set -eu
           IMG=ghcr.io/modernmavericks/porthole-base
           VER="${{ needs.build.outputs.ver }}"
-          docker build -t "$IMG:$VER" -t "$IMG:latest" _basectx
+          # One script assembles the context and reads the XPRA_VERSION pin, so this job and the
+          # PR-time base-image.yml build byte-identical instructions.
+          sh build/build-base-image.sh "$IMG:$VER" "$IMG:latest"
           docker push "$IMG:$VER"
           docker push "$IMG:latest"
           echo "pushed $IMG:$VER + :latest"

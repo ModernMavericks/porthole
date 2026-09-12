@@ -14,7 +14,7 @@ XPRA_SOCK="${TMPDIR:-/tmp}/@SLUG@-xpra.sock"
 CONFIG_DIR="${@ENVPREFIX@_CONFIG_DIR:-$HOME/.config/porthole/@SLUG@}"
 REBUILD=0
 [ "${1:-}" = --rebuild ] && REBUILD=1
-PORTHOLE_XPRA_VERSION="${@ENVPREFIX@_XPRA_VERSION:-6.5}"   # major.minor the viewer speaks
+PORTHOLE_XPRA_VERSION="${@ENVPREFIX@_XPRA_VERSION:-@XPRA_MM@}"   # major.minor the viewer speaks
 
 _root=$(cd "$(dirname "$0")/.." && pwd)   # Contents/Resources of the materialized app
 

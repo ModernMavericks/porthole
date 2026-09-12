@@ -75,14 +75,20 @@ EOF
   rm -rf "$d"
 }
 
+# Both cases derive from XPRA_VERSION, the one place the pin lives: a hardcoded version here would
+# fail its own CI on the next xpra bump and block the very PR that is supposed to carry it.
+xpra_pin_mm() { tr -d '[:space:]' < "${BATS_TEST_DIRNAME}/../XPRA_VERSION" | cut -d. -f1,2; }
+
 @test "launcher: matching xpra major.minor is silent" {
-  run_thunderbird_xpra "xpra v6.5.2-r0"
+  run_thunderbird_xpra "xpra v$(xpra_pin_mm).0-r0"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [[ "$output" != *"rebuild"* ]] || return 1
 }
 
 @test "launcher: mismatched xpra major.minor nudges to rebuild" {
-  run_thunderbird_xpra "xpra v6.4.4-r0"
+  # One minor BELOW the pin, whatever the pin is now.
+  _mm="$(xpra_pin_mm)"
+  run_thunderbird_xpra "xpra v${_mm%.*}.$(( ${_mm##*.} - 1 )).0-r0"
   [ "$status" -eq 0 ] || { echo "$output"; return 1; }
   [[ "$output" == *"--rebuild"* ]] || return 1
 }
