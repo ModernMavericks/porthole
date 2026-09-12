@@ -31,16 +31,18 @@ for m in cfg.get("customManagers", []):
 sys.exit(1)
 EOF
 
-# xpra must NOT automerge, and the rule must say why. The family default is ship-if-green; this is
-# the documented exception -- a newer xpra BUILDS FINE and changes the wire protocol the native
-# viewer speaks, which no green build can catch (the launcher's compat check only nudges).
-python3 - "$CFG" <<'EOF' || fail "renovate.json: xpra needs an automerge rule WITH a description"
+# xpra ships-if-green -- there must be NO local automerge exception for it. The concern that
+# justified one (a newer xpra silently changing the wire protocol the viewer speaks) is real but is
+# handled the way the org handles everything else: build it on the PR, fix forward in the next dated
+# release, and let check_xpra_compat nudge at runtime. A rule reappearing here without that argument
+# being revisited is drift, so assert its absence.
+python3 - "$CFG" <<'EOF' || fail "renovate.json: xpra has an automerge exception; it is meant to ship-if-green"
 import json, sys
 cfg = json.load(open(sys.argv[1]))
 for r in cfg.get("packageRules", []):
-    if "xpra" in (r.get("matchDepNames") or []) and r.get("automerge") is False and r.get("description"):
-        sys.exit(0)
-sys.exit(1)
+    if "xpra" in (r.get("matchDepNames") or []) and r.get("automerge") is False:
+        sys.exit(1)
+sys.exit(0)
 EOF
 
 # The Debian base is tracked by Renovate's BUILT-IN dockerfile manager (no custom config needed), so

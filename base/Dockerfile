@@ -23,7 +23,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # xpra (the display server the Porthole client speaks to) is not in Debian; pull from xpra.org
     # and PIN it -- the native client is written against a specific xpra wire protocol, so an
     # unpinned install could drift to an incompatible xpra. xpra.org's trixie repo retains old
-    # versions, so the pin is stable. Bump it only together with the viewer (op's compat check).
+    # versions, so the pin is stable. Renovate bumps XPRA_VERSION and it ships-if-green like any
+    # other dependency; the runtime canary for a protocol break is the launcher's check_xpra_compat,
+    # which compares this against what the VIEWER speaks (PortholeClient.m's hello).
     && curl -sS https://xpra.org/xpra.asc -o /usr/share/keyrings/xpra.asc \
     && echo 'deb [signed-by=/usr/share/keyrings/xpra.asc] https://xpra.org/ trixie main' \
        > /etc/apt/sources.list.d/xpra.list \
