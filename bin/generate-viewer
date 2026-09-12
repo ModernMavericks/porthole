@@ -91,6 +91,17 @@ BASE_TAG=latest
 BASE_REF="${PORTHOLE_BASE_REF:-ghcr.io/modernmavericks/porthole-base:$BASE_TAG}"
 CHILD="$SLUG-child.sh"
 STARTGUI="start-$SLUG-gui.sh"
+# The xpra major.minor the native viewer speaks, DERIVED from the engine's ONE xpra pin
+# (XPRA_VERSION, e.g. 6.5.2-r0-1 -> 6.5); the launcher's compat nudge compares a container's actual
+# xpra against it. Carrying the literal here too is a second thing to bump, and the stale copy wins
+# silently -- so read the pin, and fail rather than nudge against a guess.
+XPRA_PIN="$ENGINE/XPRA_VERSION"
+[ -f "$XPRA_PIN" ] || { echo "generate-viewer: no $XPRA_PIN (the base image's xpra pin)" >&2; exit 1; }
+XPRA_MM=$(tr -d '[:space:]' < "$XPRA_PIN" | cut -d. -f1,2)
+case "$XPRA_MM" in
+  [0-9]*.[0-9]*) ;;
+  *) echo "generate-viewer: bad xpra pin in $XPRA_PIN (no major.minor)" >&2; exit 1 ;;
+esac
 # ENVPREFIX: the launcher's env-override prefix (SIGNAL_IMAGE, etc.). Must be a valid POSIX shell
 # variable name: a leading digit (slug "1password" -> "1PASSWORD") is illegal and makes every
 # ${1PASSWORD_*} a "bad substitution" that kills the launcher at line 1 -- so guard it with a leading
@@ -116,7 +127,7 @@ export APP NAME SLUG PORT BASE_IMAGE BASE_REF APT_KEY_URL APT_REPO APT_PKGS EXTR
   APP_BIN APP_FLAGS USER USER_GROUP DATADIR ICON_GLOB LIFECYCLE \
   AUDIO NOAUDIO PRINTING PTRACE DARK_THEME OPEN_URL FILE_TRANSFER NOTIFICATIONS \
   EXTRA_SETUP ENCODINGS HOME IMAGE CONTAINER VOLUME APPCONFIG DATADIR_PARENT \
-  BUNDLEID CHILD STARTGUI ENVPREFIX LIFECYCLE_ONDEMAND APT_LIST AUDIO_PKG \
+  BUNDLEID CHILD STARTGUI ENVPREFIX LIFECYCLE_ONDEMAND APT_LIST AUDIO_PKG XPRA_MM \
   EXTRA_PKGS_SP USER_GROUP_ARG EXTRA_ENV HOST_MOUNTS TARBALL_URL TARBALL_BIN MENU_PRODUCER \
   UPDATE PACKAGING CAPS EXTRA_VOLUMES
 

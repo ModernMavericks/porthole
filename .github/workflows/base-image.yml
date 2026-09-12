@@ -1,0 +1,41 @@
+name: base-image
+
+# Build the shared BASE container image on every change that can alter it, so a Debian-digest or
+# xpra bump is PROVEN on the pull request instead of discovered at release time.
+#
+# It WAS discovered at release time. release.yml's base-image job runs only `if publish == 'yes'`,
+# so nothing built this image on a push or a PR: when xpra.org published 6.5.3 and the old
+# meta-package-only pin stopped resolving, the first thing that noticed was a release dispatch going
+# red -- weeks of green CI in between, on an image nobody had built.
+#
+# This job deliberately does NOT push. GHCR is written by exactly one job (release.yml's base-image,
+# on a publishing run), so a pull request can never move :latest out from under installed viewers.
+on:
+  pull_request:
+    paths:
+      - 'base/**'
+      - 'XPRA_VERSION'
+      - 'menu-daemon.py'
+      - 'templates/mac-fonts.conf'
+      - 'build/build-base-image.sh'
+      - '.github/workflows/base-image.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'base/**'
+      - 'XPRA_VERSION'
+      - 'menu-daemon.py'
+      - 'templates/mac-fonts.conf'
+      - 'build/build-base-image.sh'
+      - '.github/workflows/base-image.yml'
+  workflow_dispatch:
+
+jobs:
+  build-base:
+    runs-on: ubuntu-latest   # native x86_64 Docker; the shipped base is the amd64 image
+    steps:
+      - uses: actions/checkout@v7
+      # The same script the release job runs -- it assembles the context, passes the XPRA_VERSION
+      # pin as a build arg, and asserts the built image really carries that xpra.
+      - name: Build the shared base (no push)
+        run: sh build/build-base-image.sh porthole-base:ci

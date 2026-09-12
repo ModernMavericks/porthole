@@ -54,6 +54,9 @@ fi
 install -m 0755 "$REPO/bin/generate-viewer"              "$ENGDIR/bin/generate-viewer"
 install -m 0755 "$REPO/bin/porthole-recover-watch"       "$ENGDIR/bin/porthole-recover-watch"
 install -m 0644 "$REPO/menu-daemon.py"                   "$ENGDIR/menu-daemon.py"
+# The base image's xpra pin. generate-viewer runs on the USER's Mac at materialize time and
+# derives the launcher's compat major.minor from this file, so it has to ship with the engine.
+install -m 0644 "$REPO/XPRA_VERSION"                     "$ENGDIR/XPRA_VERSION"
 install -m 0755 "$REPO/viewer/cmake/extract-app-icns.sh" "$ENGDIR/viewer/cmake/extract-app-icns.sh"
 install -m 0644 "$REPO/packaging/macos/penguin.icns"     "$ENGDIR/penguin.icns"   # default app icon
 cp -R "$REPO/templates/." "$ENGDIR/templates/"
