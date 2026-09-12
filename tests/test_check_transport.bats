@@ -24,8 +24,17 @@ path, prog = args[0], args[1:]
 if mode == 'exit':
     sys.exit(1)
 s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+# Create the socket with its final mode ALREADY SET, the way the real
+# s6-ipcserver-socketbinder does (umask(~perms & 0777) around bind(), see
+# src/conn-tools/s6-ipcserver-socketbinder.c). bind()-then-chmod() would leave a
+# window where the socket exists at 0777 & ~umask -- and check-transport.sh samples
+# the mode the instant the path appears, so it caught that window on fast runners and
+# failed with "socket mode is 755 (-a 0600 not honored)". That accused s6 of a bug it
+# does not have: the race was here, in the stand-in.
+want = 0o666 if mode == 'perms' else perms
+_old = os.umask(~want & 0o777)
 s.bind(path)
-os.chmod(path, 0o666 if mode == 'perms' else perms)
+os.umask(_old)
 s.listen(5)
 while True:
     c, _ = s.accept()
